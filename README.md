@@ -15,7 +15,7 @@ Non gestisce scontrini fiscali, registratori telematici, fatturazione, pagamenti
 - Ticket cliente e ticket produzione raggruppati per stampante.
 - Stampante fake su file per test.
 - Stampante ESC/POS di rete su IP/porta, default `9100`.
-- Pagina mobile LAN per inviare ordini in attesa di conferma.
+- Pagina mobile LAN per confermare e stampare comande dal telefono.
 
 ## Installazione
 
@@ -102,14 +102,15 @@ I file contengono ticket cliente e produzione.
 
 ## Chiusura cassa
 
-Da `Chiusure` selezionare la giornata operativa e premere `Chiudi tutti gli ordini della giornata`.
+Da `Chiusure` selezionare la giornata operativa e premere `Chiudi turno e azzera numerazione`.
 
 La chiusura:
 
 - registra uno snapshot di vendite e incasso;
 - marca come consegnati e pagati gli ordini vendita ancora aperti;
 - lascia fuori gli ordini annullati;
-- blocca la chiusura se ci sono ordini mobile ancora da confermare.
+- blocca la chiusura se ci sono eventuali ordini ancora da confermare;
+- apre un nuovo turno: gli ordini successivi ripartono da N.001.
 
 ## Backup
 

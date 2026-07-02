@@ -6,7 +6,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
-from ..models import Order
+from ..models import Order, RegisterClosure
 
 
 def business_date_for(now: datetime | None = None, reset_hour: int | None = None) -> str:
@@ -23,10 +23,18 @@ def begin_immediate_if_sqlite(db: Session) -> None:
         db.execute(text("BEGIN IMMEDIATE"))
 
 
-def next_order_number(db: Session, business_date: str) -> int:
+def current_register_session(db: Session, business_date: str) -> int:
+    last_closed_session = db.scalar(
+        select(func.max(RegisterClosure.register_session)).where(RegisterClosure.business_date == business_date)
+    )
+    return int(last_closed_session or 0) + 1
+
+
+def next_order_number(db: Session, business_date: str, register_session: int) -> int:
     current_max = db.scalar(
         select(func.max(Order.order_number)).where(
             Order.business_date == business_date,
+            Order.register_session == register_session,
             Order.order_number.is_not(None),
         )
     )

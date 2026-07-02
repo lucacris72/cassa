@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import Order, OrderItem, Product
-from .numbering import begin_immediate_if_sqlite, business_date_for, next_order_number
+from .numbering import begin_immediate_if_sqlite, business_date_for, current_register_session, next_order_number
 
 
 class OrderError(ValueError):
@@ -84,9 +84,11 @@ def create_confirmed_order(
     try:
         begin_immediate_if_sqlite(db)
         business_date = business_date_for()
+        register_session = current_register_session(db, business_date)
         order = Order(
-            order_number=next_order_number(db, business_date),
+            order_number=next_order_number(db, business_date, register_session),
             business_date=business_date,
+            register_session=register_session,
             status="paid" if mark_paid else "confirmed",
             total_cents=0,
             source=source,
@@ -115,6 +117,7 @@ def create_pending_order(db: Session, lines: list[CartLine], *, source: str, not
         order = Order(
             order_number=None,
             business_date=business_date,
+            register_session=current_register_session(db, business_date),
             status="pending_confirmation",
             total_cents=total_cents,
             source=source,
@@ -139,8 +142,10 @@ def confirm_pending_order(db: Session, order_id: int) -> Order:
         if order.status != "pending_confirmation":
             raise OrderError("L'ordine non e in attesa di conferma")
         business_date = business_date_for()
+        register_session = current_register_session(db, business_date)
         order.business_date = business_date
-        order.order_number = next_order_number(db, business_date)
+        order.register_session = register_session
+        order.order_number = next_order_number(db, business_date, register_session)
         order.status = "confirmed"
         db.commit()
         db.refresh(order)

@@ -9,6 +9,7 @@ from ..auth import add_flash, pop_flashes, require_user
 from ..database import get_db
 from ..models import Category, Product, User
 from ..services import orders as order_service
+from ..services.printing import print_order
 from ..templating import render
 
 
@@ -55,9 +56,13 @@ def create_mobile_order(
 ):
     try:
         lines = order_service.parse_cart_json(cart_json)
-        order = order_service.create_pending_order(db, lines, source="mobile", notes=notes.strip() or None)
+        order = order_service.create_confirmed_order(db, lines, source="mobile", notes=notes.strip() or None)
+        result = print_order(db, order.id)
     except Exception as exc:
         add_flash(request, f"Ordine mobile non salvato: {exc}", "error")
         return RedirectResponse("/mobile", status_code=303)
-    add_flash(request, "Ordine inviato alla cassa", "success")
-    return RedirectResponse(f"/orders/{order.id}", status_code=303)
+    for warning in result.warnings:
+        add_flash(request, warning, "warning")
+    label = f"{order.order_number:03d}" if order.order_number is not None else str(order.id)
+    add_flash(request, f"Comanda N. {label} inviata. Pronto per il prossimo ordine.", "success")
+    return RedirectResponse("/mobile", status_code=303)

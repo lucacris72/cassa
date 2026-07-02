@@ -187,12 +187,13 @@ def test_close_register_creates_sales_history_and_closes_orders(cashier_client, 
 
     response = cashier_client.post(
         "/closures",
-        data={"business_date": order.business_date, "notes": "fine serata"},
+        data={"business_date": order.business_date, "register_session": "1", "notes": "fine serata"},
         follow_redirects=False,
     )
     assert response.status_code == 303
     closure = db_session.scalar(select(RegisterClosure).where(RegisterClosure.business_date == order.business_date))
     assert closure is not None
+    assert closure.register_session == 1
     assert closure.order_count == 1
     assert closure.sales_total_cents == 300
     assert closure.cash_total_cents == 300
@@ -205,3 +206,51 @@ def test_close_register_creates_sales_history_and_closes_orders(cashier_client, 
     detail = cashier_client.get(f"/closures/{closure.id}")
     assert detail.status_code == 200
     assert "Chiusura" in detail.text
+
+
+def test_order_number_resets_after_register_closure(cashier_client, db_session):
+    product = db_session.scalar(select(Product).where(Product.name == "Caffe"))
+    first_response = cashier_client.post(
+        "/orders",
+        data={"cart_json": json.dumps([{"product_id": product.id, "quantity": 1}])},
+        follow_redirects=False,
+    )
+    assert first_response.status_code == 303
+    first_order = db_session.scalar(select(Order).order_by(Order.id.desc()))
+    assert first_order.order_number == 1
+    assert first_order.register_session == 1
+
+    close_response = cashier_client.post(
+        "/closures",
+        data={"business_date": first_order.business_date, "register_session": "1"},
+        follow_redirects=False,
+    )
+    assert close_response.status_code == 303
+
+    second_response = cashier_client.post(
+        "/orders",
+        data={"cart_json": json.dumps([{"product_id": product.id, "quantity": 1}])},
+        follow_redirects=False,
+    )
+    assert second_response.status_code == 303
+    second_order = db_session.scalar(select(Order).order_by(Order.id.desc()))
+    assert second_order.business_date == first_order.business_date
+    assert second_order.register_session == 2
+    assert second_order.order_number == 1
+
+
+def test_mobile_order_is_confirmed_printed_and_returns_to_mobile(cashier_client, db_session):
+    product = db_session.scalar(select(Product).where(Product.name == "Birra media"))
+    response = cashier_client.post(
+        "/mobile/orders",
+        data={"cart_json": json.dumps([{"product_id": product.id, "quantity": 1}])},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/mobile"
+
+    order = db_session.scalar(select(Order).order_by(Order.id.desc()))
+    assert order.source == "mobile"
+    assert order.status == "confirmed"
+    assert order.order_number == 1
+    assert db_session.scalars(select(PrintJob).where(PrintJob.order_id == order.id)).all()

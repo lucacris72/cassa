@@ -19,7 +19,7 @@
       <div class="order-list">
         {% for order in pending_orders %}
           <a class="order-row pending" href="/orders/{{ order.id }}">
-            <strong>Mobile #{{ order.id }}</strong>
+            <strong>T{{ order.register_session }} · Mobile #{{ order.id }}</strong>
             <span>{{ order.total_cents|money }}</span>
             <span>{{ order.created_at.strftime("%H:%M") }}</span>
           </a>
@@ -30,7 +30,7 @@
     <div class="order-list">
       {% for order in orders %}
         <a class="order-row" href="/orders/{{ order.id }}">
-          <strong>{% if order.order_number %}N. {{ "%03d"|format(order.order_number) }}{% else %}S/N{% endif %}</strong>
+          <strong>T{{ order.register_session }} · {% if order.order_number %}N. {{ "%03d"|format(order.order_number) }}{% else %}S/N{% endif %}</strong>
           <span>{{ order.status }}</span>
           <span>{{ order.total_cents|money }}</span>
           <span>{{ order.created_at.strftime("%H:%M") }}</span>

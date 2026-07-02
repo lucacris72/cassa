@@ -508,6 +508,19 @@ pre {
   padding: 12px;
 }
 
+.mobile-order-page .cashier-layout {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.mobile-order-page .product-button {
+  min-height: 96px;
+}
+
+.mobile-order-page .button,
+.mobile-order-page button {
+  min-height: 48px;
+}
+
 @media (max-width: 900px) {
   .topbar {
     align-items: flex-start;
@@ -524,6 +537,10 @@ pre {
 
   .cart-panel {
     position: static;
+  }
+
+  .mobile-order-page .cashier-layout {
+    grid-template-columns: 1fr;
   }
 
   .order-row {

@@ -4,7 +4,7 @@
   <section class="order-detail">
     <div class="panel">
       <div class="section-header">
-        <h1>{% if order.order_number %}Ordine N. {{ "%03d"|format(order.order_number) }}{% else %}Ordine mobile #{{ order.id }}{% endif %}</h1>
+        <h1>{% if order.order_number %}Ordine T{{ order.register_session }} N. {{ "%03d"|format(order.order_number) }}{% else %}Ordine mobile #{{ order.id }}{% endif %}</h1>
         <span class="status">{{ order.status }}</span>
       </div>
       <p>{{ order.business_date }} · {{ order.created_at.strftime("%H:%M") }} · {{ order.source }}</p>

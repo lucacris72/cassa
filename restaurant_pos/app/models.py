@@ -52,11 +52,14 @@ class Product(Base):
 
 class Order(Base):
     __tablename__ = "orders"
-    __table_args__ = (UniqueConstraint("business_date", "order_number", name="uq_order_business_number"),)
+    __table_args__ = (
+        UniqueConstraint("business_date", "register_session", "order_number", name="uq_order_business_session_number"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     order_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     business_date: Mapped[str] = mapped_column(String(10), nullable=False)
+    register_session: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(40), nullable=False)
     total_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     source: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -108,10 +111,11 @@ class User(Base):
 
 class RegisterClosure(Base):
     __tablename__ = "register_closures"
-    __table_args__ = (UniqueConstraint("business_date", name="uq_register_closure_business_date"),)
+    __table_args__ = (UniqueConstraint("business_date", "register_session", name="uq_register_closure_business_session"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     business_date: Mapped[str] = mapped_column(String(10), nullable=False)
+    register_session: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     closed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
     closed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     order_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
