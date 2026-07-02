@@ -76,5 +76,6 @@ def create_order(
         for warning in result.warnings:
             add_flash(request, warning, "warning")
     else:
-        add_flash(request, "Ordine creato e stampa avviata", "success")
-    return RedirectResponse(f"/orders/{order.id}", status_code=303)
+        label = f"{order.order_number:03d}" if order.order_number is not None else str(order.id)
+        add_flash(request, f"Ordine N. {label} creato. Pronto per il prossimo ordine.", "success")
+    return RedirectResponse("/", status_code=303)

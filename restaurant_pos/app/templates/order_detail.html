@@ -30,6 +30,7 @@
         <strong>{{ order.total_cents|money }}</strong>
       </div>
       <div class="actions">
+        <a class="button primary" href="/">Nuovo ordine</a>
         {% if order.status == "pending_confirmation" %}
           <form method="post" action="/orders/{{ order.id }}/confirm"><button class="button primary" type="submit">Conferma e stampa</button></form>
         {% endif %}

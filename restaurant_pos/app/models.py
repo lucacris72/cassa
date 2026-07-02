@@ -106,6 +106,23 @@ class User(Base):
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+class RegisterClosure(Base):
+    __tablename__ = "register_closures"
+    __table_args__ = (UniqueConstraint("business_date", name="uq_register_closure_business_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    business_date: Mapped[str] = mapped_column(String(10), nullable=False)
+    closed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+    closed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    order_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sales_total_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cash_total_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cancelled_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    closed_by: Mapped[User | None] = relationship()
+
+
 class PrintJob(Base):
     __tablename__ = "print_jobs"
 

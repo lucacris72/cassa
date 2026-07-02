@@ -10,6 +10,7 @@ Non gestisce scontrini fiscali, registratori telematici, fatturazione, pagamenti
 - Cassa touch-friendly con prodotti raggruppati per categoria.
 - Ordini con numero progressivo per giornata operativa.
 - Storico ordini con dettaglio, ristampa, pagato, consegnato e annullato.
+- Chiusura cassa giornaliera con snapshot vendite e incasso.
 - Admin prodotti, categorie e stampanti.
 - Ticket cliente e ticket produzione raggruppati per stampante.
 - Stampante fake su file per test.
@@ -98,6 +99,17 @@ print_output/
 ```
 
 I file contengono ticket cliente e produzione.
+
+## Chiusura cassa
+
+Da `Chiusure` selezionare la giornata operativa e premere `Chiudi tutti gli ordini della giornata`.
+
+La chiusura:
+
+- registra uno snapshot di vendite e incasso;
+- marca come consegnati e pagati gli ordini vendita ancora aperti;
+- lascia fuori gli ordini annullati;
+- blocca la chiusura se ci sono ordini mobile ancora da confermare.
 
 ## Backup
 

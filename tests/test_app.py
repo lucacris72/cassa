@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from restaurant_pos.app.models import Category, Order, Printer, PrintJob, Product, User
+from restaurant_pos.app.models import Category, Order, Printer, PrintJob, Product, RegisterClosure, User
 from restaurant_pos.app.services import printing
 from restaurant_pos.app.services.numbering import business_date_for
 from restaurant_pos.app.services.orders import create_confirmed_order, parse_cart_json
@@ -34,7 +34,7 @@ def test_login_valid_and_invalid(client):
 
 
 def test_main_pages_render(admin_client):
-    for path in ["/", "/orders", "/products", "/categories", "/printers", "/mobile"]:
+    for path in ["/", "/orders", "/closures", "/products", "/categories", "/printers", "/mobile"]:
         response = admin_client.get(path)
         assert response.status_code == 200, path
 
@@ -77,6 +77,7 @@ def test_order_creation_numbering_snapshot_and_fake_output(cashier_client, db_se
         follow_redirects=False,
     )
     assert response.status_code == 303
+    assert response.headers["location"] == "/"
 
     order = db_session.scalar(select(Order).order_by(Order.id.desc()))
     assert order is not None
@@ -171,3 +172,36 @@ def test_reprint_customer_and_production(cashier_client, db_session):
     detail = cashier_client.get(f"/orders/{order.id}")
     assert detail.status_code == 200
     assert "Stampe" in detail.text
+
+
+def test_close_register_creates_sales_history_and_closes_orders(cashier_client, db_session):
+    product = db_session.scalar(select(Product).where(Product.name == "Acqua"))
+    cashier_client.post(
+        "/orders",
+        data={"cart_json": json.dumps([{"product_id": product.id, "quantity": 3}])},
+        follow_redirects=False,
+    )
+    order = db_session.scalar(select(Order).order_by(Order.id.desc()))
+    assert order.status == "confirmed"
+    assert order.paid_at is None
+
+    response = cashier_client.post(
+        "/closures",
+        data={"business_date": order.business_date, "notes": "fine serata"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    closure = db_session.scalar(select(RegisterClosure).where(RegisterClosure.business_date == order.business_date))
+    assert closure is not None
+    assert closure.order_count == 1
+    assert closure.sales_total_cents == 300
+    assert closure.cash_total_cents == 300
+
+    db_session.refresh(order)
+    assert order.status == "delivered"
+    assert order.paid_at is not None
+    assert order.completed_at is not None
+
+    detail = cashier_client.get(f"/closures/{closure.id}")
+    assert detail.status_code == 200
+    assert "Chiusura" in detail.text

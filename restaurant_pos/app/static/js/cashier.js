@@ -82,7 +82,9 @@ document.querySelectorAll("[data-category-filter]").forEach((button) => {
     document.querySelectorAll("[data-category-filter]").forEach((item) => item.classList.remove("active"));
     button.classList.add("active");
     document.querySelectorAll("[data-product-button]").forEach((product) => {
-      product.hidden = filter !== "all" && product.dataset.categoryId !== filter;
+      const hidden = filter !== "all" && product.dataset.categoryId !== filter;
+      product.hidden = hidden;
+      product.classList.toggle("is-hidden", hidden);
     });
   });
 });

@@ -9,6 +9,10 @@
         <button class="button" type="submit">Filtra</button>
       </form>
     </div>
+    <div class="actions">
+      <a class="button primary" href="/">Nuovo ordine</a>
+      <a class="button" href="/closures?date={{ selected_date }}">Chiusura cassa</a>
+    </div>
 
     {% if pending_orders %}
       <h2>Da confermare</h2>

@@ -9,7 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .config import get_settings, resolve_project_path
 from .database import get_session_factory, init_db
-from .routers import auth, cashier, categories, mobile, orders, printers, products
+from .routers import auth, cashier, categories, closures, mobile, orders, printers, products
 from .seed import seed_initial_data
 
 
@@ -37,6 +37,7 @@ def create_app() -> FastAPI:
     app.include_router(categories.router)
     app.include_router(printers.router)
     app.include_router(orders.router)
+    app.include_router(closures.router)
     app.include_router(mobile.router)
 
     return app

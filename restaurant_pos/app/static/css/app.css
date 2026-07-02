@@ -297,6 +297,11 @@ button:hover {
   text-align: left;
 }
 
+.product-button[hidden],
+.product-button.is-hidden {
+  display: none;
+}
+
 .product-button span {
   font-size: 18px;
   font-weight: 850;
@@ -366,6 +371,35 @@ button:hover {
   justify-content: space-between;
   margin: 16px 0;
   padding-top: 16px;
+}
+
+.summary-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.metric {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.metric span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.metric strong {
+  font-size: 22px;
+}
+
+.success-text {
+  color: var(--success);
+  font-weight: 850;
 }
 
 .two-column {

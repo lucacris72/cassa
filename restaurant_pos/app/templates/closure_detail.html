@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Chiusura{% endblock %}
+{% block content %}
+  <section class="order-detail">
+    <section class="panel">
+      <div class="section-header">
+        <h1>Chiusura {{ closure.business_date }}</h1>
+        <a class="button primary" href="/">Nuovo ordine</a>
+      </div>
+      <div class="summary-grid">
+        <div class="metric"><span>Ordini vendita</span><strong>{{ closure.order_count }}</strong></div>
+        <div class="metric"><span>Vendite</span><strong>{{ closure.sales_total_cents|money }}</strong></div>
+        <div class="metric"><span>Incasso</span><strong>{{ closure.cash_total_cents|money }}</strong></div>
+        <div class="metric"><span>Annullati</span><strong>{{ closure.cancelled_count }}</strong></div>
+      </div>
+      <p>Chiusa alle {{ closure.closed_at.strftime("%H:%M") }}{% if closure.closed_by %} da {{ closure.closed_by.name }}{% endif %}</p>
+      {% if closure.notes %}<p><strong>Note:</strong> {{ closure.notes }}</p>{% endif %}
+    </section>
+
+    <section class="panel">
+      <h2>Ordini inclusi</h2>
+      <table>
+        <thead>
+          <tr><th>N.</th><th>Stato</th><th>Ora</th><th>Totale</th></tr>
+        </thead>
+        <tbody>
+          {% for order in orders %}
+            <tr>
+              <td><a href="/orders/{{ order.id }}">{% if order.order_number %}{{ "%03d"|format(order.order_number) }}{% else %}S/N{% endif %}</a></td>
+              <td>{{ order.status }}</td>
+              <td>{{ order.created_at.strftime("%H:%M") }}</td>
+              <td>{{ order.total_cents|money }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </section>
+{% endblock %}
