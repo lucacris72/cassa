@@ -48,30 +48,36 @@
                 <input form="product-edit-{{ product.id }}" type="hidden" name="return_to" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
                 <input form="product-edit-{{ product.id }}" type="hidden" name="active" value="{{ 'true' if product.active else 'false' }}">
 
-                <label>
-                  Nome
-                  <input form="product-edit-{{ product.id }}" name="name" value="{{ product.name }}" required>
-                </label>
-                <label>
-                  Prezzo
-                  <input form="product-edit-{{ product.id }}" name="price" inputmode="decimal" value="{{ '%.2f' % (product.price_cents / 100) }}" required>
-                </label>
-                <label>
-                  Categoria
-                  <select form="product-edit-{{ product.id }}" name="category_id" required>
-                    {% for category in categories %}
-                      <option value="{{ category.id }}" {% if category.id == product.category_id %}selected{% endif %}>{{ category.name }}</option>
-                    {% endfor %}
-                  </select>
-                </label>
-                <label>
-                  Ordine
-                  <input form="product-edit-{{ product.id }}" name="sort_order" type="number" value="{{ product.sort_order }}">
-                </label>
-                <label class="product-description-field">
-                  Descrizione
-                  <input form="product-edit-{{ product.id }}" name="description" value="{{ product.description or '' }}">
-                </label>
+                <div class="product-main-fields">
+                  <label class="product-name-field">
+                    Nome
+                    <input form="product-edit-{{ product.id }}" name="name" value="{{ product.name }}" required>
+                  </label>
+                  <label class="product-price-field">
+                    Prezzo
+                    <input form="product-edit-{{ product.id }}" name="price" inputmode="decimal" value="{{ '%.2f' % (product.price_cents / 100) }}" required>
+                  </label>
+                </div>
+
+                <div class="product-meta-fields">
+                  <label>
+                    Categoria
+                    <select form="product-edit-{{ product.id }}" name="category_id" required>
+                      {% for category in categories %}
+                        <option value="{{ category.id }}" {% if category.id == product.category_id %}selected{% endif %}>{{ category.name }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <label class="product-order-field">
+                    Ordine
+                    <input form="product-edit-{{ product.id }}" name="sort_order" type="number" value="{{ product.sort_order }}">
+                  </label>
+                  <label class="product-description-field">
+                    Descrizione
+                    <input form="product-edit-{{ product.id }}" name="description" value="{{ product.description or '' }}">
+                  </label>
+                </div>
+
                 <div class="product-row-actions">
                   <button form="product-edit-{{ product.id }}" class="button primary small" type="submit">Salva</button>
                   <form method="post" action="/products/{{ product.id }}/toggle-active">
