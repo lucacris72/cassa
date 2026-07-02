@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block main_class %}login-page{% endblock %}
+{% block content %}
+  <section class="login-panel">
+    <h1>Cassa</h1>
+    <form method="post" action="/login" class="stack">
+      <label>
+        PIN
+        <input name="pin" inputmode="numeric" pattern="[0-9]*" type="password" autofocus required>
+      </label>
+      <button class="button primary full" type="submit">Entra</button>
+    </form>
+  </section>
+{% endblock %}

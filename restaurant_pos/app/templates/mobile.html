@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Mobile{% endblock %}
+{% block main_class %}cashier-page mobile-order-page{% endblock %}
+{% block content %}
+  <section class="cashier-layout mobile-layout">
+    <div class="catalog">
+      <div class="category-strip" aria-label="Categorie">
+        <button class="chip active" type="button" data-category-filter="all">Tutti</button>
+        {% for category in categories %}
+          <button class="chip" type="button" data-category-filter="{{ category.id }}">{{ category.name }}</button>
+        {% endfor %}
+      </div>
+
+      <div class="product-grid compact">
+        {% for product in products %}
+          <button
+            class="product-button"
+            type="button"
+            data-product-button
+            data-product-id="{{ product.id }}"
+            data-category-id="{{ product.category_id }}"
+            data-name="{{ product.name }}"
+            data-price-cents="{{ product.price_cents }}"
+          >
+            <span>{{ product.name }}</span>
+            <strong>{{ product.price_cents|money }}</strong>
+          </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <aside class="cart-panel">
+      <h1>Invio cassa</h1>
+      <div id="cart-items" class="cart-items"></div>
+      <div class="cart-total">
+        <span>Totale</span>
+        <strong id="cart-total">0.00 EUR</strong>
+      </div>
+      <form method="post" action="/mobile/orders" id="order-form" class="stack">
+        <input type="hidden" name="cart_json" id="cart-json">
+        <label>
+          Note ordine
+          <textarea name="notes" rows="2"></textarea>
+        </label>
+        <button class="button primary full" type="submit">Invia</button>
+        <button class="button danger full" type="button" id="clear-cart">Svuota</button>
+      </form>
+    </aside>
+  </section>
+  <script src="{{ url_for('static', path='/js/cashier.js') }}"></script>
+{% endblock %}

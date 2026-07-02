@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Categorie{% endblock %}
+{% block content %}
+  <section class="two-column">
+    <form method="post" action="/categories" class="panel stack">
+      <h1>Nuova categoria</h1>
+      <label>Nome <input name="name" required></label>
+      <label>
+        Stampante produzione
+        <select name="printer_id">
+          <option value="0">Nessuna</option>
+          {% for printer in printers %}
+            <option value="{{ printer.id }}">{{ printer.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Ordine <input name="sort_order" type="number" value="0"></label>
+      <button class="button primary" type="submit">Salva</button>
+    </form>
+
+    <section class="panel">
+      <h1>Categorie</h1>
+      <table>
+        <thead>
+          <tr><th>Nome</th><th>Stampante</th><th>Stato</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for category in categories %}
+            <tr>
+              <td>{{ category.name }}</td>
+              <td>{{ category.printer.name if category.printer else "Nessuna" }}</td>
+              <td>{{ "Attiva" if category.active else "Disattiva" }}</td>
+              <td><a class="button small" href="/categories/{{ category.id }}/edit">Modifica</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </section>
+{% endblock %}

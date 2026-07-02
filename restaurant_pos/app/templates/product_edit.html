@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Modifica prodotto{% endblock %}
+{% block content %}
+  <form method="post" action="/products/{{ product.id }}/edit" class="panel stack narrow">
+    <h1>Modifica prodotto</h1>
+    <label>Nome <input name="name" value="{{ product.name }}" required></label>
+    <label>Prezzo <input name="price" inputmode="decimal" value="{{ '%.2f' % (product.price_cents / 100) }}" required></label>
+    <label>
+      Categoria
+      <select name="category_id" required>
+        {% for category in categories %}
+          <option value="{{ category.id }}" {% if category.id == product.category_id %}selected{% endif %}>{{ category.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Ordine <input name="sort_order" type="number" value="{{ product.sort_order }}"></label>
+    <label class="checkbox"><input type="checkbox" name="active" value="true" {% if product.active %}checked{% endif %}> Attivo</label>
+    <label>Descrizione <textarea name="description" rows="3">{{ product.description or "" }}</textarea></label>
+    <div class="actions">
+      <button class="button primary" type="submit">Salva</button>
+      <a class="button" href="/products">Annulla</a>
+    </div>
+  </form>
+{% endblock %}

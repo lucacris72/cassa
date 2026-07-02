@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Ordine{% endblock %}
+{% block content %}
+  <section class="order-detail">
+    <div class="panel">
+      <div class="section-header">
+        <h1>{% if order.order_number %}Ordine N. {{ "%03d"|format(order.order_number) }}{% else %}Ordine mobile #{{ order.id }}{% endif %}</h1>
+        <span class="status">{{ order.status }}</span>
+      </div>
+      <p>{{ order.business_date }} · {{ order.created_at.strftime("%H:%M") }} · {{ order.source }}</p>
+      {% if order.notes %}<p><strong>Note:</strong> {{ order.notes }}</p>{% endif %}
+      <table>
+        <thead>
+          <tr><th>Prodotto</th><th>Categoria</th><th>Qta</th><th>Prezzo</th><th>Totale</th></tr>
+        </thead>
+        <tbody>
+          {% for item in order.items %}
+            <tr>
+              <td>{{ item.product_name }}{% if item.notes %}<br><small>{{ item.notes }}</small>{% endif %}</td>
+              <td>{{ item.category_name }}</td>
+              <td>{{ item.quantity }}</td>
+              <td>{{ item.unit_price_cents|money }}</td>
+              <td>{{ item.line_total_cents|money }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="cart-total">
+        <span>Totale</span>
+        <strong>{{ order.total_cents|money }}</strong>
+      </div>
+      <div class="actions">
+        {% if order.status == "pending_confirmation" %}
+          <form method="post" action="/orders/{{ order.id }}/confirm"><button class="button primary" type="submit">Conferma e stampa</button></form>
+        {% endif %}
+        <form method="post" action="/orders/{{ order.id }}/reprint/customer"><button class="button" type="submit">Ristampa cliente</button></form>
+        <form method="post" action="/orders/{{ order.id }}/reprint/production"><button class="button" type="submit">Ristampa produzione</button></form>
+        <form method="post" action="/orders/{{ order.id }}/mark-paid"><button class="button" type="submit">Pagato</button></form>
+        <form method="post" action="/orders/{{ order.id }}/mark-delivered"><button class="button" type="submit">Consegnato</button></form>
+        <form method="post" action="/orders/{{ order.id }}/cancel"><button class="button danger" type="submit">Annulla</button></form>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Stampe</h2>
+      <div class="jobs">
+        {% for job in order.print_jobs %}
+          <details class="job {{ job.status }}">
+            <summary>{{ job.job_type }} · {{ job.status }} · {{ job.printer.name if job.printer else "N/D" }}</summary>
+            {% if job.error_message %}<p class="error-text">{{ job.error_message }}</p>{% endif %}
+            <pre>{{ job.payload_text }}</pre>
+          </details>
+        {% else %}
+          <p>Nessuna stampa registrata.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+{% endblock %}

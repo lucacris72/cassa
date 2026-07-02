@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Ordini{% endblock %}
+{% block content %}
+  <section class="panel">
+    <div class="section-header">
+      <h1>Ordini</h1>
+      <form method="get" action="/orders" class="inline-form">
+        <input type="date" name="date" value="{{ selected_date }}">
+        <button class="button" type="submit">Filtra</button>
+      </form>
+    </div>
+
+    {% if pending_orders %}
+      <h2>Da confermare</h2>
+      <div class="order-list">
+        {% for order in pending_orders %}
+          <a class="order-row pending" href="/orders/{{ order.id }}">
+            <strong>Mobile #{{ order.id }}</strong>
+            <span>{{ order.total_cents|money }}</span>
+            <span>{{ order.created_at.strftime("%H:%M") }}</span>
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="order-list">
+      {% for order in orders %}
+        <a class="order-row" href="/orders/{{ order.id }}">
+          <strong>{% if order.order_number %}N. {{ "%03d"|format(order.order_number) }}{% else %}S/N{% endif %}</strong>
+          <span>{{ order.status }}</span>
+          <span>{{ order.total_cents|money }}</span>
+          <span>{{ order.created_at.strftime("%H:%M") }}</span>
+        </a>
+      {% else %}
+        <p>Nessun ordine per questa data.</p>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

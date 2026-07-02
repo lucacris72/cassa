@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Modifica stampante{% endblock %}
+{% block content %}
+  <form method="post" action="/printers/{{ printer.id }}/edit" class="panel stack narrow">
+    <h1>Modifica stampante</h1>
+    <label>Nome <input name="name" value="{{ printer.name }}" required></label>
+    <label>
+      Tipo
+      <select name="type">
+        <option value="fake" {% if printer.type == "fake" %}selected{% endif %}>Fake file</option>
+        <option value="network_escpos" {% if printer.type == "network_escpos" %}selected{% endif %}>Network ESC/POS</option>
+      </select>
+    </label>
+    <label>IP <input name="ip" value="{{ printer.ip or '' }}" placeholder="192.168.1.50"></label>
+    <label>Porta <input name="port" type="number" value="{{ printer.port }}"></label>
+    <label class="checkbox"><input type="checkbox" name="enabled" value="true" {% if printer.enabled %}checked{% endif %}> Abilitata</label>
+    <label class="checkbox"><input type="checkbox" name="is_customer_printer" value="true" {% if printer.is_customer_printer %}checked{% endif %}> Cliente</label>
+    <div class="actions">
+      <button class="button primary" type="submit">Salva</button>
+      <a class="button" href="/printers">Annulla</a>
+    </div>
+  </form>
+{% endblock %}

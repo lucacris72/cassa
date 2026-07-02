@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Modifica categoria{% endblock %}
+{% block content %}
+  <form method="post" action="/categories/{{ category.id }}/edit" class="panel stack narrow">
+    <h1>Modifica categoria</h1>
+    <label>Nome <input name="name" value="{{ category.name }}" required></label>
+    <label>
+      Stampante produzione
+      <select name="printer_id">
+        <option value="0">Nessuna</option>
+        {% for printer in printers %}
+          <option value="{{ printer.id }}" {% if category.printer_id == printer.id %}selected{% endif %}>{{ printer.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Ordine <input name="sort_order" type="number" value="{{ category.sort_order }}"></label>
+    <label class="checkbox"><input type="checkbox" name="active" value="true" {% if category.active %}checked{% endif %}> Attiva</label>
+    <div class="actions">
+      <button class="button primary" type="submit">Salva</button>
+      <a class="button" href="/categories">Annulla</a>
+    </div>
+  </form>
+{% endblock %}

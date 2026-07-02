@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Prodotti{% endblock %}
+{% block content %}
+  <section class="two-column">
+    <form method="post" action="/products" class="panel stack">
+      <h1>Nuovo prodotto</h1>
+      <label>Nome <input name="name" required></label>
+      <label>Prezzo <input name="price" inputmode="decimal" placeholder="6.00" required></label>
+      <label>
+        Categoria
+        <select name="category_id" required>
+          {% for category in categories %}
+            <option value="{{ category.id }}">{{ category.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Ordine <input name="sort_order" type="number" value="0"></label>
+      <label>Descrizione <textarea name="description" rows="3"></textarea></label>
+      <button class="button primary" type="submit">Salva</button>
+    </form>
+
+    <section class="panel">
+      <h1>Prodotti</h1>
+      <table>
+        <thead>
+          <tr><th>Nome</th><th>Categoria</th><th>Prezzo</th><th>Stato</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for product in products %}
+            <tr>
+              <td>{{ product.name }}</td>
+              <td>{{ product.category.name }}</td>
+              <td>{{ product.price_cents|money }}</td>
+              <td>{{ "Attivo" if product.active else "Disattivo" }}</td>
+              <td class="actions">
+                <a class="button small" href="/products/{{ product.id }}/edit">Modifica</a>
+                {% if product.active %}
+                  <form method="post" action="/products/{{ product.id }}/disable">
+                    <button class="button small danger" type="submit">Disattiva</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </section>
+{% endblock %}
