@@ -415,6 +415,33 @@ button:hover {
   margin-top: 18px;
 }
 
+.bulk-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -4px 0 10px;
+}
+
+.bulk-actions-global {
+  background: #f7f9fb;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0 0 16px;
+  padding: 10px;
+}
+
+.bulk-actions-global span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  margin-right: auto;
+}
+
+.bulk-actions .checkbox {
+  margin-right: auto;
+}
+
 .product-edit-list {
   display: grid;
   gap: 10px;
@@ -426,7 +453,7 @@ button:hover {
   border-radius: 8px;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
   padding: 12px;
 }
 
@@ -434,10 +461,28 @@ button:hover {
   background: #f5f6f8;
 }
 
+.product-select-field {
+  align-items: center;
+  align-self: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0;
+  width: 42px;
+}
+
+.product-select-field input {
+  min-height: 0;
+  width: auto;
+}
+
 .product-main-fields,
 .product-meta-fields {
   display: grid;
   gap: 10px;
+  grid-column: 2;
   min-width: 0;
 }
 
@@ -446,7 +491,6 @@ button:hover {
 }
 
 .product-meta-fields {
-  grid-column: 1 / -1;
   grid-template-columns: minmax(160px, 0.9fr) 96px minmax(180px, 1.2fr);
 }
 
@@ -465,6 +509,8 @@ button:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  grid-column: 3;
+  grid-row: 1 / span 2;
   justify-content: end;
   min-width: 120px;
 }
@@ -634,15 +680,18 @@ pre {
   }
 
   .product-edit-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: 42px minmax(0, 1fr);
   }
 
+  .product-main-fields,
+  .product-meta-fields,
   .product-row-actions {
-    grid-column: 1 / -1;
+    grid-column: 2;
   }
 
   .product-row-actions {
     flex-direction: row;
+    grid-row: auto;
   }
 
   .product-main-fields,
@@ -685,8 +734,14 @@ pre {
     grid-template-columns: 1fr;
   }
 
+  .product-select-field {
+    width: 100%;
+  }
+
+  .product-select-field,
   .product-main-fields,
   .product-meta-fields {
+    grid-column: auto;
     grid-template-columns: 1fr;
   }
 

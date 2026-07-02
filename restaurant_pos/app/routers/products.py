@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
 from ..auth import add_flash, pop_flashes, require_user
 from ..database import get_db
-from ..models import Category, Product, User
+from ..models import Category, OrderItem, Product, User
 from ..templating import render
 from ..utils import parse_price_to_cents
 
@@ -170,6 +172,73 @@ def toggle_product_active(
     product.active = not product.active
     db.commit()
     add_flash(request, f"{product.name}: {'attivo' if product.active else 'disattivo'}", "success")
+    return RedirectResponse(_safe_products_redirect(return_to), status_code=303)
+
+
+def _delete_product(db: Session, product: Product) -> None:
+    db.execute(update(OrderItem).where(OrderItem.product_id == product.id).values(product_id=None))
+    db.delete(product)
+
+
+@router.post("/{product_id}/delete")
+def delete_product(
+    product_id: int,
+    request: Request,
+    return_to: str = Form("/products"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user("admin")),
+):
+    product = db.get(Product, product_id)
+    if product is None:
+        add_flash(request, "Prodotto non trovato", "error")
+        return RedirectResponse(_safe_products_redirect(return_to), status_code=303)
+    product_name = product.name
+    try:
+        _delete_product(db, product)
+        db.commit()
+        add_flash(request, f"Prodotto eliminato: {product_name}", "success")
+    except Exception as exc:
+        db.rollback()
+        add_flash(request, f"Prodotto non eliminato: {exc}", "error")
+    return RedirectResponse(_safe_products_redirect(return_to), status_code=303)
+
+
+@router.post("/bulk")
+def bulk_products(
+    request: Request,
+    action: str = Form(...),
+    product_ids: Annotated[list[int] | None, Form()] = None,
+    return_to: str = Form("/products"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user("admin")),
+):
+    selected_ids = product_ids or []
+    if not selected_ids:
+        add_flash(request, "Seleziona almeno un prodotto", "warning")
+        return RedirectResponse(_safe_products_redirect(return_to), status_code=303)
+
+    products = db.scalars(select(Product).where(Product.id.in_(selected_ids))).all()
+    try:
+        if action == "activate":
+            for product in products:
+                product.active = True
+            message = f"Prodotti attivati: {len(products)}"
+        elif action == "deactivate":
+            for product in products:
+                product.active = False
+            message = f"Prodotti disattivati: {len(products)}"
+        elif action == "delete":
+            for product in products:
+                _delete_product(db, product)
+            message = f"Prodotti eliminati: {len(products)}"
+        else:
+            add_flash(request, "Azione non valida", "error")
+            return RedirectResponse(_safe_products_redirect(return_to), status_code=303)
+        db.commit()
+        add_flash(request, message, "success")
+    except Exception as exc:
+        db.rollback()
+        add_flash(request, f"Azione di gruppo fallita: {exc}", "error")
     return RedirectResponse(_safe_products_redirect(return_to), status_code=303)
 
 

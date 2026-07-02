@@ -107,6 +107,66 @@ def test_admin_crud_pages(admin_client, db_session):
     assert product.active is True
 
 
+def test_product_delete_and_bulk_actions(admin_client, db_session):
+    cucina = db_session.scalar(select(Category).where(Category.name == "Cucina"))
+    product_a = Product(name="Bulk A", price_cents=100, category_id=cucina.id, active=True, sort_order=99)
+    product_b = Product(name="Bulk B", price_cents=200, category_id=cucina.id, active=True, sort_order=100)
+    db_session.add_all([product_a, product_b])
+    db_session.commit()
+    db_session.refresh(product_a)
+    db_session.refresh(product_b)
+    product_a_id = product_a.id
+    product_b_id = product_b.id
+
+    deactivate = admin_client.post(
+        "/products/bulk",
+        data={"action": "deactivate", "product_ids": [str(product_a_id), str(product_b_id)], "return_to": "/products"},
+        follow_redirects=False,
+    )
+    assert deactivate.status_code == 303
+    db_session.refresh(product_a)
+    db_session.refresh(product_b)
+    assert product_a.active is False
+    assert product_b.active is False
+
+    activate = admin_client.post(
+        "/products/bulk",
+        data={"action": "activate", "product_ids": [str(product_a_id), str(product_b_id)], "return_to": "/products"},
+        follow_redirects=False,
+    )
+    assert activate.status_code == 303
+    db_session.refresh(product_a)
+    db_session.refresh(product_b)
+    assert product_a.active is True
+    assert product_b.active is True
+
+    order = create_confirmed_order(
+        db_session,
+        parse_cart_json(json.dumps([{"product_id": product_a_id, "quantity": 1}])),
+        source="test",
+    )
+    delete = admin_client.post(
+        f"/products/{product_a_id}/delete",
+        data={"return_to": "/products"},
+        follow_redirects=False,
+    )
+    assert delete.status_code == 303
+    db_session.expire_all()
+    assert db_session.get(Product, product_a_id) is None
+    db_session.refresh(order.items[0])
+    assert order.items[0].product_id is None
+    assert order.items[0].product_name == "Bulk A"
+
+    bulk_delete = admin_client.post(
+        "/products/bulk",
+        data={"action": "delete", "product_ids": [str(product_b_id)], "return_to": "/products"},
+        follow_redirects=False,
+    )
+    assert bulk_delete.status_code == 303
+    db_session.expire_all()
+    assert db_session.get(Product, product_b_id) is None
+
+
 def test_order_creation_numbering_snapshot_and_fake_output(cashier_client, db_session, test_env):
     product = db_session.scalar(select(Product).where(Product.name == "Panino salamella"))
     response = cashier_client.post(

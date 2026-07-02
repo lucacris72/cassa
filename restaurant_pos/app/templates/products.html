@@ -37,14 +37,32 @@
           <button class="button" type="submit">Filtra</button>
         </form>
       </div>
+      <form id="bulk-products" method="post" action="/products/bulk"></form>
+      <input form="bulk-products" type="hidden" name="return_to" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+      <div class="bulk-actions bulk-actions-global">
+        <span>Selezionati</span>
+        <button form="bulk-products" class="button small" type="submit" name="action" value="activate">Attiva</button>
+        <button form="bulk-products" class="button small" type="submit" name="action" value="deactivate">Disattiva</button>
+        <button form="bulk-products" class="button small danger" type="submit" name="action" value="delete" onclick="return confirm('Eliminare i prodotti selezionati?')">Elimina</button>
+      </div>
 
       {% for group in grouped_products %}
+        {% set bulk_group_id = "bulk-group-" ~ loop.index %}
         <section class="product-group">
           <h2>{{ group.name }}</h2>
+          <div class="bulk-actions">
+            <label class="checkbox">
+              <input type="checkbox" data-bulk-select-group="{{ bulk_group_id }}">
+              Seleziona categoria
+            </label>
+          </div>
           <div class="product-edit-list">
             {% for product in group.products %}
               <form id="product-edit-{{ product.id }}" method="post" action="/products/{{ product.id }}/edit"></form>
               <article class="product-edit-row {% if not product.active %}inactive{% endif %}">
+                <label class="product-select-field" aria-label="Seleziona prodotto">
+                  <input form="bulk-products" type="checkbox" name="product_ids" value="{{ product.id }}" data-bulk-product-checkbox="{{ bulk_group_id }}">
+                </label>
                 <input form="product-edit-{{ product.id }}" type="hidden" name="return_to" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
                 <input form="product-edit-{{ product.id }}" type="hidden" name="active" value="{{ 'true' if product.active else 'false' }}">
 
@@ -79,12 +97,16 @@
                 </div>
 
                 <div class="product-row-actions">
-                  <button form="product-edit-{{ product.id }}" class="button primary small" type="submit">Salva</button>
                   <form method="post" action="/products/{{ product.id }}/toggle-active">
                     <input type="hidden" name="return_to" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
                     <button class="status-toggle {{ 'on' if product.active else 'off' }}" type="submit">
                       {{ "Attivo" if product.active else "Disattivo" }}
                     </button>
+                  </form>
+                  <button form="product-edit-{{ product.id }}" class="button primary small" type="submit">Salva</button>
+                  <form method="post" action="/products/{{ product.id }}/delete">
+                    <input type="hidden" name="return_to" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+                    <button class="button small danger" type="submit" onclick="return confirm('Eliminare questo prodotto?')">Elimina</button>
                   </form>
                 </div>
               </article>
@@ -96,4 +118,5 @@
       {% endfor %}
     </section>
   </section>
+  <script src="{{ url_for('static', path='/js/products.js') }}"></script>
 {% endblock %}
