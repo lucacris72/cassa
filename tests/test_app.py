@@ -68,6 +68,44 @@ def test_admin_crud_pages(admin_client, db_session):
     assert product is not None
     assert product.price_cents == 450
 
+    products_page = admin_client.get(f"/products?category_id={category.id}&show=all")
+    assert products_page.status_code == 200
+    assert "Torta" in products_page.text
+    assert "Solo attivi" in products_page.text
+
+    cucina = db_session.scalar(select(Category).where(Category.name == "Cucina"))
+    edit_response = admin_client.post(
+        f"/products/{product.id}/edit",
+        data={
+            "name": "Torta aggiornata",
+            "price": "5.00",
+            "category_id": str(cucina.id),
+            "sort_order": "3",
+            "active": "false",
+            "description": "fetta",
+            "return_to": "/products?show=all",
+        },
+        follow_redirects=False,
+    )
+    assert edit_response.status_code == 303
+    assert edit_response.headers["location"] == "/products?show=all"
+    db_session.refresh(product)
+    assert product.name == "Torta aggiornata"
+    assert product.price_cents == 500
+    assert product.category_id == cucina.id
+    assert product.sort_order == 3
+    assert product.active is False
+
+    toggle_response = admin_client.post(
+        f"/products/{product.id}/toggle-active",
+        data={"return_to": "/products?show=inactive"},
+        follow_redirects=False,
+    )
+    assert toggle_response.status_code == 303
+    assert toggle_response.headers["location"] == "/products?show=inactive"
+    db_session.refresh(product)
+    assert product.active is True
+
 
 def test_order_creation_numbering_snapshot_and_fake_output(cashier_client, db_session, test_env):
     product = db_session.scalar(select(Product).where(Product.name == "Panino salamella"))

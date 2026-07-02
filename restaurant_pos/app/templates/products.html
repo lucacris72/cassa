@@ -19,31 +19,76 @@
       <button class="button primary" type="submit">Salva</button>
     </form>
 
-    <section class="panel">
-      <h1>Prodotti</h1>
-      <table>
-        <thead>
-          <tr><th>Nome</th><th>Categoria</th><th>Prezzo</th><th>Stato</th><th></th></tr>
-        </thead>
-        <tbody>
-          {% for product in products %}
-            <tr>
-              <td>{{ product.name }}</td>
-              <td>{{ product.category.name }}</td>
-              <td>{{ product.price_cents|money }}</td>
-              <td>{{ "Attivo" if product.active else "Disattivo" }}</td>
-              <td class="actions">
-                <a class="button small" href="/products/{{ product.id }}/edit">Modifica</a>
-                {% if product.active %}
-                  <form method="post" action="/products/{{ product.id }}/disable">
-                    <button class="button small danger" type="submit">Disattiva</button>
+    <section class="panel product-admin">
+      <div class="section-header">
+        <h1>Prodotti</h1>
+        <form method="get" action="/products" class="inline-form">
+          <select name="category_id">
+            <option value="0">Tutte le categorie</option>
+            {% for category in categories %}
+              <option value="{{ category.id }}" {% if selected_category_id == category.id %}selected{% endif %}>{{ category.name }}</option>
+            {% endfor %}
+          </select>
+          <select name="show">
+            <option value="all" {% if selected_show == "all" %}selected{% endif %}>Tutti</option>
+            <option value="active" {% if selected_show == "active" %}selected{% endif %}>Solo attivi</option>
+            <option value="inactive" {% if selected_show == "inactive" %}selected{% endif %}>Solo disattivi</option>
+          </select>
+          <button class="button" type="submit">Filtra</button>
+        </form>
+      </div>
+
+      {% for group in grouped_products %}
+        <section class="product-group">
+          <h2>{{ group.name }}</h2>
+          <div class="product-edit-list">
+            {% for product in group.products %}
+              <form id="product-edit-{{ product.id }}" method="post" action="/products/{{ product.id }}/edit"></form>
+              <article class="product-edit-row {% if not product.active %}inactive{% endif %}">
+                <input form="product-edit-{{ product.id }}" type="hidden" name="return_to" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+                <input form="product-edit-{{ product.id }}" type="hidden" name="active" value="{{ 'true' if product.active else 'false' }}">
+
+                <label>
+                  Nome
+                  <input form="product-edit-{{ product.id }}" name="name" value="{{ product.name }}" required>
+                </label>
+                <label>
+                  Prezzo
+                  <input form="product-edit-{{ product.id }}" name="price" inputmode="decimal" value="{{ '%.2f' % (product.price_cents / 100) }}" required>
+                </label>
+                <label>
+                  Categoria
+                  <select form="product-edit-{{ product.id }}" name="category_id" required>
+                    {% for category in categories %}
+                      <option value="{{ category.id }}" {% if category.id == product.category_id %}selected{% endif %}>{{ category.name }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label>
+                  Ordine
+                  <input form="product-edit-{{ product.id }}" name="sort_order" type="number" value="{{ product.sort_order }}">
+                </label>
+                <label class="product-description-field">
+                  Descrizione
+                  <input form="product-edit-{{ product.id }}" name="description" value="{{ product.description or '' }}">
+                </label>
+                <div class="product-row-actions">
+                  <button form="product-edit-{{ product.id }}" class="button primary small" type="submit">Salva</button>
+                  <form method="post" action="/products/{{ product.id }}/toggle-active">
+                    <input type="hidden" name="return_to" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+                    <button class="status-toggle {{ 'on' if product.active else 'off' }}" type="submit">
+                      {{ "Attivo" if product.active else "Disattivo" }}
+                    </button>
                   </form>
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+                  <a class="button small" href="/products/{{ product.id }}/edit">Scheda</a>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        </section>
+      {% else %}
+        <p>Nessun prodotto trovato.</p>
+      {% endfor %}
     </section>
   </section>
 {% endblock %}

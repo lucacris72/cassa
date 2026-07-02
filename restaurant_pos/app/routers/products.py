@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -19,14 +19,41 @@ def _categories(db: Session):
     return db.scalars(select(Category).where(Category.active.is_(True)).order_by(Category.sort_order, Category.name)).all()
 
 
+def _safe_products_redirect(return_to: str | None) -> str:
+    if return_to and return_to.startswith("/products"):
+        return return_to
+    return "/products"
+
+
+def _group_products(products: list[Product]) -> list[dict[str, object]]:
+    groups: dict[int, dict[str, object]] = {}
+    for product in products:
+        category = product.category
+        category_id = category.id if category else 0
+        category_name = category.name if category else "Senza categoria"
+        if category_id not in groups:
+            groups[category_id] = {"name": category_name, "products": []}
+        groups[category_id]["products"].append(product)
+    return list(groups.values())
+
+
 @router.get("", response_class=HTMLResponse)
 def products_page(
     request: Request,
+    category_id: int = Query(0),
+    show: str = Query("all"),
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin")),
 ):
+    query = select(Product).join(Product.category).options(selectinload(Product.category))
+    if category_id:
+        query = query.where(Product.category_id == category_id)
+    if show == "active":
+        query = query.where(Product.active.is_(True))
+    elif show == "inactive":
+        query = query.where(Product.active.is_(False))
     products = db.scalars(
-        select(Product).options(selectinload(Product.category)).order_by(Product.active.desc(), Product.sort_order, Product.name)
+        query.order_by(Category.sort_order, Category.name, Product.sort_order, Product.name)
     ).all()
     return render(
         request,
@@ -35,7 +62,10 @@ def products_page(
             "user": user,
             "flashes": pop_flashes(request),
             "products": products,
+            "grouped_products": _group_products(products),
             "categories": _categories(db),
+            "selected_category_id": category_id,
+            "selected_show": show,
         },
     )
 
@@ -102,13 +132,14 @@ def edit_product(
     sort_order: int = Form(0),
     active: bool = Form(False),
     description: str = Form(""),
+    return_to: str = Form("/products"),
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin")),
 ):
     product = db.get(Product, product_id)
     if product is None:
         add_flash(request, "Prodotto non trovato", "error")
-        return RedirectResponse("/products", status_code=303)
+        return RedirectResponse(_safe_products_redirect(return_to), status_code=303)
     try:
         product.name = name.strip()
         product.price_cents = parse_price_to_cents(price)
@@ -121,7 +152,25 @@ def edit_product(
     except Exception as exc:
         db.rollback()
         add_flash(request, f"Prodotto non aggiornato: {exc}", "error")
-    return RedirectResponse("/products", status_code=303)
+    return RedirectResponse(_safe_products_redirect(return_to), status_code=303)
+
+
+@router.post("/{product_id}/toggle-active")
+def toggle_product_active(
+    product_id: int,
+    request: Request,
+    return_to: str = Form("/products"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user("admin")),
+):
+    product = db.get(Product, product_id)
+    if product is None:
+        add_flash(request, "Prodotto non trovato", "error")
+        return RedirectResponse(_safe_products_redirect(return_to), status_code=303)
+    product.active = not product.active
+    db.commit()
+    add_flash(request, f"{product.name}: {'attivo' if product.active else 'disattivo'}", "success")
+    return RedirectResponse(_safe_products_redirect(return_to), status_code=303)
 
 
 @router.post("/{product_id}/disable")
