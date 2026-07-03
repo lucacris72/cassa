@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from restaurant_pos.app.models import Category, Order, Printer, PrintJob, Product, RegisterClosure, User
+from restaurant_pos.app.models import Category, Order, OrderItem, Printer, PrintJob, Product, RegisterClosure, User
 from restaurant_pos.app.services import printing
 from restaurant_pos.app.services.numbering import business_date_for
 from restaurant_pos.app.services.orders import create_confirmed_order, parse_cart_json
@@ -105,6 +105,35 @@ def test_admin_crud_pages(admin_client, db_session):
     assert toggle_response.headers["location"] == "/products?show=inactive"
     db_session.refresh(product)
     assert product.active is True
+
+
+def test_printer_delete_unassigns_references(admin_client, db_session):
+    printer = db_session.scalar(select(Printer).where(Printer.name == "Kitchen Printer"))
+    category = db_session.scalar(select(Category).where(Category.printer_id == printer.id))
+    product = db_session.scalar(select(Product).where(Product.category_id == category.id))
+    order = create_confirmed_order(
+        db_session,
+        parse_cart_json(json.dumps([{"product_id": product.id, "quantity": 1}])),
+        source="test",
+    )
+    result = printing.print_order(db_session, order.id, include_customer=False, include_production=True)
+
+    printer_id = printer.id
+    category_id = category.id
+    item_id = order.items[0].id
+    job_id = result.jobs[0].id
+    assert order.items[0].printer_id == printer_id
+    assert result.jobs[0].printer_id == printer_id
+
+    response = admin_client.post(f"/printers/{printer_id}/delete", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/printers"
+    db_session.expire_all()
+    assert db_session.get(Printer, printer_id) is None
+    assert db_session.get(Category, category_id).printer_id is None
+    assert db_session.get(OrderItem, item_id).printer_id is None
+    assert db_session.get(PrintJob, job_id).printer_id is None
 
 
 def test_product_delete_and_bulk_actions(admin_client, db_session):

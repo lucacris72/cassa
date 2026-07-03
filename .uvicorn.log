@@ -1,0 +1,27 @@
+INFO:     Started server process [16853]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:41794 - "GET /printers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33874 - "POST /printers/3/delete HTTP/1.1" 303 See Other
+INFO:     127.0.0.1:33874 - "GET /printers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33874 - "POST /printers/1/delete HTTP/1.1" 303 See Other
+INFO:     127.0.0.1:33874 - "GET /printers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33874 - "POST /printers/2/delete HTTP/1.1" 303 See Other
+INFO:     127.0.0.1:33874 - "GET /printers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59342 - "GET /categories HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41680 - "GET /categories/1/edit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55944 - "POST /categories/1/edit HTTP/1.1" 303 See Other
+INFO:     127.0.0.1:55944 - "GET /categories HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55944 - "GET /categories/2/edit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55960 - "POST /categories/2/edit HTTP/1.1" 303 See Other
+INFO:     127.0.0.1:55960 - "GET /categories HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55960 - "GET /categories/3/edit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55960 - "POST /categories/3/edit HTTP/1.1" 303 See Other
+INFO:     127.0.0.1:55960 - "GET /categories HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55960 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55960 - "GET /static/js/cashier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:48070 - "POST /orders HTTP/1.1" 303 See Other
+INFO:     127.0.0.1:48070 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48802 - "POST /login HTTP/1.1" 303 See Other
+INFO:     127.0.0.1:48810 - "GET /printers HTTP/1.1" 200 OK

@@ -38,7 +38,14 @@
                 <form method="post" action="/printers/{{ printer.id }}/test">
                   <button class="button small" type="submit">Test</button>
                 </form>
+                <form method="post" action="/printers/{{ printer.id }}/delete">
+                  <button class="button small danger" type="submit" onclick="return confirm('Eliminare questa stampante? Le categorie collegate resteranno senza stampante.')">Elimina</button>
+                </form>
               </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6">Nessuna stampante configurata.</td>
             </tr>
           {% endfor %}
         </tbody>
