@@ -133,6 +133,25 @@ def create_pending_order(db: Session, lines: list[CartLine], *, source: str, not
         raise
 
 
+def update_pending_order(db: Session, order_id: int, lines: list[CartLine], *, notes: str | None = None) -> Order:
+    try:
+        order = db.get(Order, order_id)
+        if order is None:
+            raise OrderError("Ordine non trovato")
+        if order.status != "pending_confirmation":
+            raise OrderError("Solo le comande in revisione possono essere modificate")
+        items, total_cents = _build_order_items(db, lines)
+        order.items = items
+        order.total_cents = total_cents
+        order.notes = notes
+        db.commit()
+        db.refresh(order)
+        return order
+    except Exception:
+        db.rollback()
+        raise
+
+
 def confirm_pending_order(db: Session, order_id: int) -> Order:
     try:
         begin_immediate_if_sqlite(db)

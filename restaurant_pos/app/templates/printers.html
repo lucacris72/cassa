@@ -10,10 +10,11 @@
         <select name="type">
           <option value="fake">Fake file</option>
           <option value="network_escpos">Network ESC/POS</option>
+          <option value="usb_escpos">USB ESC/POS</option>
         </select>
       </label>
-      <label>IP <input name="ip" placeholder="192.168.1.50"></label>
-      <label>Porta <input name="port" type="number" value="9100"></label>
+      <label>IP / ID USB <input name="ip" placeholder="192.168.1.50 oppure 04b8:0e15" list="usb-printers"></label>
+      <label>Porta / endpoint <input name="port" type="number" value="9100"></label>
       <label class="checkbox"><input type="checkbox" name="enabled" value="true" checked> Abilitata</label>
       <label class="checkbox"><input type="checkbox" name="is_customer_printer" value="true"> Cliente</label>
       <button class="button primary" type="submit">Salva</button>
@@ -30,7 +31,7 @@
             <tr>
               <td>{{ printer.name }}</td>
               <td>{{ printer.type }}</td>
-              <td>{{ printer.ip or "-" }}{% if printer.ip %}:{{ printer.port }}{% endif %}</td>
+              <td>{{ printer_address(printer) }}</td>
               <td>{{ "Cliente" if printer.is_customer_printer else "Produzione" }}</td>
               <td>{{ "Abilitata" if printer.enabled else "Disabilitata" }}</td>
               <td class="actions">
@@ -46,6 +47,31 @@
           {% else %}
             <tr>
               <td colspan="6">Nessuna stampante configurata.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <datalist id="usb-printers">
+        {% for device in usb_devices %}
+          <option value="{{ device.ref }}">{{ device.label }}</option>
+        {% endfor %}
+      </datalist>
+
+      <h2>USB rilevate</h2>
+      <table>
+        <thead>
+          <tr><th>Dispositivo</th><th>ID USB</th></tr>
+        </thead>
+        <tbody>
+          {% for device in usb_devices %}
+            <tr>
+              <td>{{ device.label }}</td>
+              <td>{{ device.ref }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="2">Nessuna stampante USB rilevata.</td>
             </tr>
           {% endfor %}
         </tbody>

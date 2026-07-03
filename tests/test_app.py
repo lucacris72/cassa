@@ -5,10 +5,11 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from restaurant_pos.app.models import Category, Order, OrderItem, Printer, PrintJob, Product, RegisterClosure, User
+from restaurant_pos.app.models import Category, Order, OrderItem, Printer, PrintJob, Product, RegisterClosure, Reservation, User
 from restaurant_pos.app.services import printing
 from restaurant_pos.app.services.numbering import business_date_for
 from restaurant_pos.app.services.orders import create_confirmed_order, parse_cart_json
+from restaurant_pos.app.services.reservations import import_reservations_from_xlsx
 
 
 def test_seed_data(db_session):
@@ -34,7 +35,7 @@ def test_login_valid_and_invalid(client):
 
 
 def test_main_pages_render(admin_client):
-    for path in ["/", "/orders", "/closures", "/products", "/categories", "/printers", "/mobile"]:
+    for path in ["/", "/orders", "/reservations", "/closures", "/products", "/categories", "/printers", "/mobile"]:
         response = admin_client.get(path)
         assert response.status_code == 200, path
 
@@ -228,7 +229,18 @@ def test_order_creation_numbering_snapshot_and_fake_output(cashier_client, db_se
 
     output_files = list(Path(test_env["print_output_dir"]).glob("*.txt"))
     assert len(output_files) == 2
-    assert any("ORDINE N. 001" in path.read_text(encoding="utf-8") for path in output_files)
+    assert any("ORDINE" in path.read_text(encoding="utf-8") and "001" in path.read_text(encoding="utf-8") for path in output_files)
+    customer_ticket = next(path.read_text(encoding="utf-8") for path in output_files if "_customer_" in path.name)
+    assert "COMANDA CLIENTE" in customer_ticket
+    assert " 2 x PANINO SALAMELLA" in customer_ticket
+    assert "2 x 6.00 EUR = 12.00 EUR" in customer_ticket
+    assert "TOTALE" in customer_ticket
+    assert "12.00 EUR" in customer_ticket
+    production_ticket = next(path.read_text(encoding="utf-8") for path in output_files if "_production_" in path.name)
+    assert "QTA 2" in production_ticket
+    assert "PANINO SALAMELLA" in production_ticket
+    assert "NOTE:" in production_ticket
+    assert "senza cipolla" in production_ticket
 
 
 def test_daily_order_number_increment(db_session):
@@ -266,7 +278,7 @@ def test_failed_network_printer_job_is_recorded(db_session, monkeypatch):
     customer_printer.ip = "192.0.2.10"
     db_session.commit()
 
-    def fail_network(job, printer):
+    def fail_network(job, printer, order):
         raise printing.PrintError("offline")
 
     monkeypatch.setattr(printing, "_send_network_escpos", fail_network)
@@ -276,6 +288,27 @@ def test_failed_network_printer_job_is_recorded(db_session, monkeypatch):
     assert result.jobs[0].status == "failed"
     assert "offline" in result.jobs[0].error_message
     assert db_session.get(Order, order.id) is not None
+
+
+def test_usb_printer_job_dispatch_is_recorded(db_session, monkeypatch):
+    customer_printer = db_session.scalar(select(Printer).where(Printer.is_customer_printer.is_(True)))
+    customer_printer.type = "usb_escpos"
+    customer_printer.ip = "04b8:0e15"
+    customer_printer.port = 0
+    db_session.commit()
+    sent = {}
+
+    def fake_usb(job, printer, order):
+        sent["job_type"] = job.job_type
+        sent["printer_ip"] = printer.ip
+        sent["order_id"] = order.id
+
+    monkeypatch.setattr(printing, "_send_usb_escpos", fake_usb)
+    product = db_session.scalar(select(Product).where(Product.name == "Panino salamella"))
+    order = create_confirmed_order(db_session, parse_cart_json(json.dumps([{"product_id": product.id, "quantity": 1}])), source="test")
+    result = printing.print_order(db_session, order.id, include_customer=True, include_production=False)
+    assert result.jobs[0].status == "printed"
+    assert sent == {"job_type": "customer", "printer_ip": "04b8:0e15", "order_id": order.id}
 
 
 def test_reprint_customer_and_production(cashier_client, db_session):
@@ -381,3 +414,107 @@ def test_mobile_order_is_confirmed_printed_and_returns_to_mobile(cashier_client,
     assert order.status == "confirmed"
     assert order.order_number == 1
     assert db_session.scalars(select(PrintJob).where(PrintJob.order_id == order.id)).all()
+
+
+def test_reservation_import_and_create_pending_order(admin_client, db_session, tmp_path):
+    import openpyxl
+
+    path = tmp_path / "prenotazioni.xlsx"
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Risposte del modulo 1"
+    sheet.append(
+        [
+            "Informazioni cronologiche",
+            "Indirizzo email",
+            "Cognome ",
+            "Nome",
+            "Numero di partecipanti",
+            "Tipologia di prenotazione",
+            "Liberatoria allergeni",
+            "€4,00 PANINO CON SALAMELLA",
+            "€3,00 PATATINE FRITTE",
+        ]
+    )
+    sheet.append(
+        [
+            "2026-07-01 10:00:00",
+            "rossi@example.com",
+            "Rossi",
+            "Mario",
+            2,
+            "Ospite",
+            "Ho letto e compreso",
+            2,
+            1,
+        ]
+    )
+    workbook.save(path)
+
+    result = import_reservations_from_xlsx(db_session, str(path))
+    assert result.created == 1
+    assert result.products_created == 2
+
+    reservation = db_session.scalar(select(Reservation).where(Reservation.last_name == "Rossi"))
+    assert reservation is not None
+    assert reservation.total_cents == 1100
+    assert len(reservation.items) == 2
+
+    page = admin_client.get("/reservations?q=rossi")
+    assert page.status_code == 200
+    assert "Rossi Mario" in page.text
+
+    create_response = admin_client.post(f"/reservations/{reservation.id}/create-order", follow_redirects=False)
+    assert create_response.status_code == 303
+    order = db_session.scalar(select(Order).order_by(Order.id.desc()))
+    assert create_response.headers["location"] == f"/orders/{order.id}"
+    assert order.status == "pending_confirmation"
+    assert order.source == "reservation"
+    assert order.order_number is None
+    assert order.total_cents == 1100
+    db_session.refresh(reservation)
+    assert reservation.status == "converted"
+    assert reservation.order_id == order.id
+
+
+def test_pending_order_can_be_edited_before_confirm(admin_client, db_session):
+    salamella = db_session.scalar(select(Product).where(Product.name == "Panino salamella"))
+    patatine = db_session.scalar(select(Product).where(Product.name == "Patatine"))
+    order = create_confirmed_order(
+        db_session,
+        parse_cart_json(json.dumps([{"product_id": salamella.id, "quantity": 1}])),
+        source="test",
+    )
+    order.status = "pending_confirmation"
+    order.order_number = None
+    db_session.commit()
+
+    response = admin_client.post(
+        f"/orders/{order.id}/edit",
+        data={
+            "cart_json": json.dumps(
+                [
+                    {"product_id": salamella.id, "quantity": 2, "notes": "ben cotta"},
+                    {"product_id": patatine.id, "quantity": 1},
+                ]
+            ),
+            "notes": "modificata prima della stampa",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/orders/{order.id}"
+    db_session.expire_all()
+    edited = db_session.get(Order, order.id)
+    assert edited.status == "pending_confirmation"
+    assert edited.total_cents == 1550
+    assert edited.notes == "modificata prima della stampa"
+    assert [(item.product_name, item.quantity, item.notes) for item in edited.items] == [
+        ("Panino salamella", 2, "ben cotta"),
+        ("Patatine", 1, None),
+    ]
+    detail = admin_client.get(f"/orders/{order.id}")
+    assert detail.status_code == 200
+    assert "pending-order-form" in detail.text
+    assert "Aggiungi prodotto" in detail.text

@@ -2,43 +2,105 @@
 {% block title %}Ordine{% endblock %}
 {% block content %}
   <section class="order-detail">
+    <div class="order-hero">
+      <div>
+        <p class="eyebrow">{{ order.source }}</p>
+        <h1>
+          {% if order.order_number %}
+            Ordine T{{ order.register_session }} N. {{ "%03d"|format(order.order_number) }}
+          {% elif order.source == "reservation" %}
+            Comanda da prenotazione #{{ order.id }}
+          {% elif order.source == "mobile" %}
+            Ordine mobile #{{ order.id }}
+          {% else %}
+            Comanda in revisione #{{ order.id }}
+          {% endif %}
+        </h1>
+        <p class="muted">{{ order.business_date }} · {{ order.created_at.strftime("%H:%M") }}</p>
+      </div>
+      <span class="status">{{ "In revisione" if order.status == "pending_confirmation" else order.status }}</span>
+    </div>
+
+    <div class="summary-grid">
+      <div class="metric"><span>Totale</span><strong>{{ order.total_cents|money }}</strong></div>
+      <div class="metric"><span>Righe</span><strong>{{ order.items|length }}</strong></div>
+      <div class="metric"><span>Turno</span><strong>T{{ order.register_session }}</strong></div>
+    </div>
+
+    {% if order.status == "pending_confirmation" %}
+      <section class="review-layout">
+        <form method="post" action="/orders/{{ order.id }}/edit" id="pending-order-form" class="panel stack">
+          <div class="section-header">
+            <div>
+              <h2>Comanda da revisionare</h2>
+              <p class="muted">Modifica quantita, note o aggiungi prodotti prima di confermare.</p>
+            </div>
+            <button class="button primary" type="submit">Salva modifiche</button>
+          </div>
+
+          <input type="hidden" name="cart_json" id="pending-cart-json">
+          <div id="pending-order-items" class="pending-order-items"></div>
+
+          <label>
+            Note ordine
+            <textarea name="notes" id="pending-order-notes" rows="3">{{ order.notes or "" }}</textarea>
+          </label>
+        </form>
+
+        <aside class="panel stack">
+          <h2>Aggiungi prodotto</h2>
+          <label>
+            Prodotto
+            <select id="pending-product-select">
+              {% for product in products %}
+                <option value="{{ product.id }}" data-name="{{ product.name }}" data-price-cents="{{ product.price_cents }}">
+                  {{ product.category.name }} · {{ product.name }} · {{ product.price_cents|money }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Quantita
+            <input id="pending-product-quantity" type="number" min="1" value="1">
+          </label>
+          <button class="button full" type="button" id="pending-add-product">Aggiungi</button>
+          <form method="post" action="/orders/{{ order.id }}/confirm">
+            <button class="button primary full" type="submit">Conferma e stampa</button>
+          </form>
+        </aside>
+      </section>
+    {% else %}
+      <section class="panel">
+        <table>
+          <thead>
+            <tr><th>Prodotto</th><th>Categoria</th><th>Qta</th><th>Prezzo</th><th>Totale</th></tr>
+          </thead>
+          <tbody>
+            {% for item in order.items %}
+              <tr>
+                <td>{{ item.product_name }}{% if item.notes %}<br><small>{{ item.notes }}</small>{% endif %}</td>
+                <td>{{ item.category_name }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ item.unit_price_cents|money }}</td>
+                <td>{{ item.line_total_cents|money }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    {% endif %}
+
     <div class="panel">
       <div class="section-header">
-        <h1>{% if order.order_number %}Ordine T{{ order.register_session }} N. {{ "%03d"|format(order.order_number) }}{% else %}Ordine mobile #{{ order.id }}{% endif %}</h1>
-        <span class="status">{{ order.status }}</span>
-      </div>
-      <p>{{ order.business_date }} · {{ order.created_at.strftime("%H:%M") }} · {{ order.source }}</p>
-      {% if order.notes %}<p><strong>Note:</strong> {{ order.notes }}</p>{% endif %}
-      <table>
-        <thead>
-          <tr><th>Prodotto</th><th>Categoria</th><th>Qta</th><th>Prezzo</th><th>Totale</th></tr>
-        </thead>
-        <tbody>
-          {% for item in order.items %}
-            <tr>
-              <td>{{ item.product_name }}{% if item.notes %}<br><small>{{ item.notes }}</small>{% endif %}</td>
-              <td>{{ item.category_name }}</td>
-              <td>{{ item.quantity }}</td>
-              <td>{{ item.unit_price_cents|money }}</td>
-              <td>{{ item.line_total_cents|money }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <div class="cart-total">
-        <span>Totale</span>
-        <strong>{{ order.total_cents|money }}</strong>
-      </div>
-      <div class="actions">
-        <a class="button primary" href="/">Nuovo ordine</a>
-        {% if order.status == "pending_confirmation" %}
-          <form method="post" action="/orders/{{ order.id }}/confirm"><button class="button primary" type="submit">Conferma e stampa</button></form>
-        {% endif %}
-        <form method="post" action="/orders/{{ order.id }}/reprint/customer"><button class="button" type="submit">Ristampa cliente</button></form>
-        <form method="post" action="/orders/{{ order.id }}/reprint/production"><button class="button" type="submit">Ristampa produzione</button></form>
-        <form method="post" action="/orders/{{ order.id }}/mark-paid"><button class="button" type="submit">Pagato</button></form>
-        <form method="post" action="/orders/{{ order.id }}/mark-delivered"><button class="button" type="submit">Consegnato</button></form>
-        <form method="post" action="/orders/{{ order.id }}/cancel"><button class="button danger" type="submit">Annulla</button></form>
+        <h2>Azioni</h2>
+        <div class="actions">
+          <a class="button primary" href="/">Nuovo ordine</a>
+          <form method="post" action="/orders/{{ order.id }}/reprint/customer"><button class="button" type="submit">Ristampa cliente</button></form>
+          <form method="post" action="/orders/{{ order.id }}/reprint/production"><button class="button" type="submit">Ristampa produzione</button></form>
+          <form method="post" action="/orders/{{ order.id }}/mark-paid"><button class="button" type="submit">Pagato</button></form>
+          <form method="post" action="/orders/{{ order.id }}/mark-delivered"><button class="button" type="submit">Consegnato</button></form>
+          <form method="post" action="/orders/{{ order.id }}/cancel"><button class="button danger" type="submit">Annulla</button></form>
+        </div>
       </div>
     </div>
 
@@ -57,4 +119,21 @@
       </div>
     </div>
   </section>
+
+  {% if order.status == "pending_confirmation" %}
+    <script>
+      window.pendingOrderItems = [
+        {% for item in order.items %}
+          {
+            product_id: {{ item.product_id or "null" }},
+            name: {{ item.product_name|tojson }},
+            price_cents: {{ item.unit_price_cents }},
+            quantity: {{ item.quantity }},
+            notes: {{ (item.notes or "")|tojson }}
+          }{% if not loop.last %},{% endif %}
+        {% endfor %}
+      ];
+    </script>
+    <script src="{{ url_for('static', path='/js/order_edit.js') }}"></script>
+  {% endif %}
 {% endblock %}

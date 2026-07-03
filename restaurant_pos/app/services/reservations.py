@@ -1,0 +1,307 @@
+from __future__ import annotations
+
+import hashlib
+import re
+from dataclasses import dataclass
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any
+
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session, selectinload
+
+from ..config import resolve_project_path
+from ..models import Category, Order, Printer, Product, Reservation, ReservationItem
+from ..utils import parse_price_to_cents
+from .orders import CartLine, OrderError, create_pending_order
+
+
+class ReservationImportError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class ImportResult:
+    created: int
+    updated: int
+    skipped: int
+    products_created: int
+    products_updated: int
+
+
+@dataclass(frozen=True)
+class ProductColumn:
+    index: int
+    name: str
+    price_cents: int
+
+
+PRODUCT_HEADER_RE = re.compile(r"^\s*€\s*([0-9]+(?:[,.][0-9]{1,2})?)\s+(.+?)\s*$")
+
+
+def _clean_text(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _quantity(value: Any) -> int:
+    if value in (None, ""):
+        return 0
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _timestamp_text(value: Any) -> str | None:
+    if isinstance(value, datetime):
+        return value.isoformat(sep=" ", timespec="seconds")
+    if isinstance(value, date):
+        return value.isoformat()
+    return _clean_text(value) or None
+
+
+def _source_key(*parts: str | None) -> str:
+    raw = "|".join(_clean_text(part).lower() for part in parts)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _column_map(headers: list[Any]) -> dict[str, int]:
+    normalized = {_clean_text(header).lower(): index for index, header in enumerate(headers)}
+    required = {
+        "timestamp": "informazioni cronologiche",
+        "email": "indirizzo email",
+        "last_name": "cognome",
+        "first_name": "nome",
+        "participant_count": "numero di partecipanti",
+        "booking_type": "tipologia di prenotazione",
+    }
+    result: dict[str, int] = {}
+    for key, label in required.items():
+        if label not in normalized:
+            raise ReservationImportError(f"Colonna mancante nel file prenotazioni: {label}")
+        result[key] = normalized[label]
+    result["acknowledgement"] = 6 if len(headers) > 6 else result["booking_type"]
+    return result
+
+
+def _product_columns(headers: list[Any]) -> list[ProductColumn]:
+    columns: list[ProductColumn] = []
+    for index, header in enumerate(headers):
+        match = PRODUCT_HEADER_RE.match(_clean_text(header))
+        if not match:
+            continue
+        price_cents = parse_price_to_cents(match.group(1))
+        name = _clean_text(match.group(2))
+        columns.append(ProductColumn(index=index, name=name, price_cents=price_cents))
+    if not columns:
+        raise ReservationImportError("Nessuna colonna prodotto trovata nel file prenotazioni")
+    return columns
+
+
+def _reservation_category(db: Session) -> Category:
+    category = db.scalar(select(Category).where(Category.name == "Prenotazioni"))
+    if category is not None:
+        return category
+
+    kitchen_printer = db.scalar(select(Printer).where(Printer.name == "Kitchen Printer"))
+    kitchen_category = db.scalar(select(Category).where(Category.name == "Cucina"))
+    printer_id = kitchen_category.printer_id if kitchen_category else kitchen_printer.id if kitchen_printer else None
+    category = Category(name="Prenotazioni", printer_id=printer_id, active=True, sort_order=5)
+    db.add(category)
+    db.flush()
+    return category
+
+
+def _product_for_column(db: Session, column: ProductColumn, category: Category) -> tuple[Product, bool, bool]:
+    product = db.scalar(select(Product).where(Product.name == column.name))
+    created = False
+    updated = False
+    if product is None:
+        product = Product(
+            name=column.name,
+            price_cents=column.price_cents,
+            category_id=category.id,
+            active=True,
+            sort_order=category.sort_order,
+        )
+        db.add(product)
+        db.flush()
+        created = True
+    else:
+        if product.price_cents != column.price_cents:
+            product.price_cents = column.price_cents
+            updated = True
+        if product.category_id != category.id:
+            product.category_id = category.id
+            updated = True
+        if not product.active:
+            product.active = True
+            updated = True
+    return product, created, updated
+
+
+def _resolve_import_path(import_path: str) -> Path:
+    path = Path(import_path.strip() or "prenotazioni.xlsx")
+    resolved = resolve_project_path(path)
+    if not resolved.exists():
+        raise ReservationImportError(f"File non trovato: {resolved}")
+    if resolved.suffix.lower() not in {".xlsx", ".xlsm"}:
+        raise ReservationImportError("Formato non supportato: usa un file .xlsx scaricato da Google Moduli")
+    return resolved
+
+
+def import_reservations_from_xlsx(db: Session, import_path: str) -> ImportResult:
+    try:
+        import openpyxl
+    except ImportError as exc:
+        raise ReservationImportError("openpyxl non installato: esegui pip install -r requirements.txt") from exc
+
+    resolved = _resolve_import_path(import_path)
+    workbook = openpyxl.load_workbook(resolved, data_only=True)
+    sheet = workbook.worksheets[0]
+    rows = list(sheet.iter_rows(values_only=True))
+    if len(rows) < 2:
+        raise ReservationImportError("Il file prenotazioni non contiene risposte")
+
+    headers = list(rows[0])
+    columns = _column_map(headers)
+    product_columns = _product_columns(headers)
+
+    category = _reservation_category(db)
+    product_by_column: dict[int, Product] = {}
+    products_created = 0
+    products_updated = 0
+    for product_column in product_columns:
+        product, created, updated = _product_for_column(db, product_column, category)
+        product_by_column[product_column.index] = product
+        products_created += int(created)
+        products_updated += int(updated)
+
+    created_count = 0
+    updated_count = 0
+    skipped_count = 0
+    source_name = resolved.name
+
+    for row_number, row in enumerate(rows[1:], start=2):
+        timestamp = _timestamp_text(row[columns["timestamp"]] if columns["timestamp"] < len(row) else None)
+        email = _clean_text(row[columns["email"]] if columns["email"] < len(row) else None) or None
+        first_name = _clean_text(row[columns["first_name"]] if columns["first_name"] < len(row) else None)
+        last_name = _clean_text(row[columns["last_name"]] if columns["last_name"] < len(row) else None)
+        if not first_name and not last_name:
+            skipped_count += 1
+            continue
+
+        reservation_items: list[ReservationItem] = []
+        total_cents = 0
+        for product_column in product_columns:
+            if product_column.index >= len(row):
+                continue
+            quantity = _quantity(row[product_column.index])
+            if quantity <= 0:
+                continue
+            product = product_by_column[product_column.index]
+            line_total = product.price_cents * quantity
+            total_cents += line_total
+            reservation_items.append(
+                ReservationItem(
+                    product_id=product.id,
+                    product_name=product.name,
+                    quantity=quantity,
+                    unit_price_cents=product.price_cents,
+                    line_total_cents=line_total,
+                )
+            )
+
+        if not reservation_items:
+            skipped_count += 1
+            continue
+
+        source_key = _source_key(timestamp, email, first_name, last_name)
+        reservation = db.scalar(
+            select(Reservation)
+            .where(Reservation.source_key == source_key)
+            .options(selectinload(Reservation.items))
+        )
+        if reservation is None:
+            reservation = Reservation(source_key=source_key, source_file=source_name, source_row=row_number)
+            db.add(reservation)
+            created_count += 1
+        elif reservation.status == "converted":
+            skipped_count += 1
+            continue
+        else:
+            db.execute(delete(ReservationItem).where(ReservationItem.reservation_id == reservation.id))
+            reservation.items = []
+            updated_count += 1
+
+        reservation.source_file = source_name
+        reservation.source_row = row_number
+        reservation.response_timestamp = timestamp
+        reservation.email = email
+        reservation.first_name = first_name
+        reservation.last_name = last_name
+        reservation.participant_count = _quantity(row[columns["participant_count"]] if columns["participant_count"] < len(row) else None)
+        reservation.booking_type = _clean_text(row[columns["booking_type"]] if columns["booking_type"] < len(row) else None) or None
+        reservation.acknowledgement = _clean_text(row[columns["acknowledgement"]] if columns["acknowledgement"] < len(row) else None) or None
+        reservation.status = "imported"
+        reservation.total_cents = total_cents
+        reservation.items = reservation_items
+
+    db.commit()
+    return ImportResult(
+        created=created_count,
+        updated=updated_count,
+        skipped=skipped_count,
+        products_created=products_created,
+        products_updated=products_updated,
+    )
+
+
+def search_reservations(db: Session, query: str = "", status: str = "open") -> list[Reservation]:
+    statement = select(Reservation).options(selectinload(Reservation.items), selectinload(Reservation.order))
+    if status == "open":
+        statement = statement.where(Reservation.status == "imported")
+    elif status in {"imported", "converted"}:
+        statement = statement.where(Reservation.status == status)
+    query = query.strip()
+    if query:
+        like = f"%{query}%"
+        statement = statement.where(
+            Reservation.first_name.ilike(like)
+            | Reservation.last_name.ilike(like)
+            | Reservation.email.ilike(like)
+        )
+    return db.scalars(statement.order_by(Reservation.last_name, Reservation.first_name, Reservation.id)).all()
+
+
+def create_order_from_reservation(db: Session, reservation_id: int) -> Order:
+    reservation = db.scalar(
+        select(Reservation)
+        .where(Reservation.id == reservation_id)
+        .options(selectinload(Reservation.items))
+    )
+    if reservation is None:
+        raise OrderError("Prenotazione non trovata")
+    if reservation.status == "converted" and reservation.order_id is not None:
+        order = db.get(Order, reservation.order_id)
+        if order is not None:
+            return order
+    lines = [
+        CartLine(product_id=item.product_id, quantity=item.quantity)
+        for item in reservation.items
+        if item.product_id is not None and item.quantity > 0
+    ]
+    if not lines:
+        raise OrderError("Prenotazione senza prodotti ordinabili")
+    notes = (
+        f"Prenotazione {reservation.last_name} {reservation.first_name}"
+        f" - {reservation.email or 'email non indicata'}"
+        f" - {reservation.booking_type or 'tipologia non indicata'}"
+        f" - partecipanti {reservation.participant_count}"
+    )
+    order = create_pending_order(db, lines, source="reservation", notes=notes)
+    reservation.status = "converted"
+    reservation.order_id = order.id
+    db.commit()
+    db.refresh(order)
+    return order

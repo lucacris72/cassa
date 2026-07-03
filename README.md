@@ -13,8 +13,10 @@ Non gestisce scontrini fiscali, registratori telematici, fatturazione, pagamenti
 - Chiusura cassa giornaliera con snapshot vendite e incasso.
 - Admin prodotti, categorie e stampanti.
 - Ticket cliente e ticket produzione raggruppati per stampante.
+- Import prenotazioni da file Excel Google Moduli e conversione in comanda da revisionare.
 - Stampante fake su file per test.
 - Stampante ESC/POS di rete su IP/porta, default `9100`.
+- Stampante ESC/POS USB diretta tramite VID/PID, senza coda stampanti Windows.
 - Pagina mobile LAN per confermare e stampare comande dal telefono.
 
 ## Installazione
@@ -76,6 +78,7 @@ Tipi supportati:
 
 - `fake`: scrive file `.txt` in `print_output/`.
 - `network_escpos`: invia testo ESC/POS via TCP a IP/porta configurati.
+- `usb_escpos`: invia ESC/POS direttamente al dispositivo USB indicato.
 
 Configurare le stampanti da `Stampanti`, poi assegnare le categorie alla stampante di produzione da `Categorie`.
 
@@ -87,6 +90,18 @@ IP: 192.168.1.50
 Porta: 9100
 Abilitata: si
 ```
+
+Per una stampante ESC/POS USB:
+
+```text
+Tipo: usb_escpos
+IP / ID USB: VID:PID mostrato nella pagina Stampanti, ad esempio 04b8:0e15
+Porta / endpoint: 0
+Abilitata: si
+Cliente: si
+```
+
+Il supporto USB usa `pyusb` e `libusb-package`. Se Windows mantiene il dispositivo occupato con un driver non compatibile libusb, il test stampante puo fallire con accesso negato.
 
 Ogni stampa ordine crea prima un record `print_jobs`, poi tenta la stampa. Se la stampante non risponde, l'ordine resta salvato e il job risulta `failed`.
 
@@ -111,6 +126,18 @@ La chiusura:
 - lascia fuori gli ordini annullati;
 - blocca la chiusura se ci sono eventuali ordini ancora da confermare;
 - apre un nuovo turno: gli ordini successivi ripartono da N.001.
+
+## Prenotazioni
+
+Scaricare le risposte di Google Moduli in formato `.xlsx`, copiarle nella cartella del progetto e aprire `Prenotazioni`.
+
+Il percorso predefinito e:
+
+```text
+prenotazioni.xlsx
+```
+
+Premere `Importa`, cercare per nome/cognome/email e usare `Crea comanda`. La comanda viene creata in revisione: dal dettaglio ordine si controlla il contenuto e si preme `Conferma e stampa`.
 
 ## Backup
 
@@ -138,7 +165,7 @@ pytest
 ## Risoluzione problemi stampa
 
 - Verificare che la stampante sia abilitata.
-- Verificare IP e porta.
+- Verificare IP/porta per rete o ID USB/endpoint per USB.
 - Provare `Test` dalla pagina stampanti.
 - Controllare lo storico ordine: i job falliti mostrano l'errore.
 - Usare `fake` per isolare problemi dell'app da problemi di rete/stampante.

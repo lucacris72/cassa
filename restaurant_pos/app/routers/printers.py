@@ -8,11 +8,35 @@ from sqlalchemy.orm import Session
 from ..auth import add_flash, pop_flashes, require_user
 from ..database import get_db
 from ..models import Category, OrderItem, Printer, PrintJob, User
-from ..services.printing import test_printer
+from ..services.printing import PrintError, list_usb_printer_devices, test_printer
 from ..templating import render
 
 
 router = APIRouter(prefix="/printers", tags=["printers"])
+
+
+def _usb_devices_for_page(request: Request):
+    try:
+        return list_usb_printer_devices()
+    except PrintError as exc:
+        add_flash(request, f"Dispositivi USB non disponibili: {exc}", "error")
+    except Exception as exc:
+        add_flash(request, f"Dispositivi USB non disponibili: {exc}", "error")
+    return []
+
+
+def _normalize_port(type: str, port: int) -> int:
+    if type == "usb_escpos" and port == 9100:
+        return 0
+    return port
+
+
+def _printer_address(printer: Printer) -> str:
+    if printer.type == "usb_escpos":
+        return printer.ip or "-"
+    if printer.ip:
+        return f"{printer.ip}:{printer.port}"
+    return "-"
 
 
 @router.get("", response_class=HTMLResponse)
@@ -22,10 +46,17 @@ def printers_page(
     user: User = Depends(require_user("admin")),
 ):
     printers = db.scalars(select(Printer).order_by(Printer.name)).all()
+    usb_devices = _usb_devices_for_page(request)
     return render(
         request,
         "printers.html",
-        {"user": user, "flashes": pop_flashes(request), "printers": printers},
+        {
+            "user": user,
+            "flashes": pop_flashes(request),
+            "printers": printers,
+            "usb_devices": usb_devices,
+            "printer_address": _printer_address,
+        },
     )
 
 
@@ -49,7 +80,7 @@ def create_printer(
             name=name.strip(),
             type=type,
             ip=ip.strip() or None,
-            port=port,
+            port=_normalize_port(type, port),
             enabled=enabled,
             is_customer_printer=is_customer_printer,
         )
@@ -70,10 +101,16 @@ def edit_printer_page(
     if printer is None:
         add_flash(request, "Stampante non trovata", "error")
         return RedirectResponse("/printers", status_code=303)
+    usb_devices = _usb_devices_for_page(request)
     return render(
         request,
         "printer_edit.html",
-        {"user": user, "flashes": pop_flashes(request), "printer": printer},
+        {
+            "user": user,
+            "flashes": pop_flashes(request),
+            "printer": printer,
+            "usb_devices": usb_devices,
+        },
     )
 
 
@@ -100,7 +137,7 @@ def edit_printer(
     printer.name = name.strip()
     printer.type = type
     printer.ip = ip.strip() or None
-    printer.port = port
+    printer.port = _normalize_port(type, port)
     printer.enabled = enabled
     printer.is_customer_printer = is_customer_printer
     db.commit()

@@ -569,6 +569,29 @@ th {
   margin-bottom: 14px;
 }
 
+.page-header {
+  align-items: start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.page-header h1 {
+  margin-bottom: 6px;
+}
+
+.page-header p,
+.muted {
+  color: var(--muted);
+  margin: 0;
+}
+
+.compact-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
 .inline-form {
   align-items: center;
   display: flex;
@@ -600,6 +623,83 @@ th {
   gap: 18px;
 }
 
+.order-hero {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 18px 20px;
+}
+
+.order-hero h1 {
+  font-size: 28px;
+  margin-bottom: 6px;
+}
+
+.eyebrow {
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.review-layout {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.pending-order-items {
+  display: grid;
+  gap: 10px;
+}
+
+.pending-order-row {
+  align-items: end;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1fr) 90px minmax(180px, 0.8fr) auto;
+  padding: 12px;
+}
+
+.pending-product {
+  display: grid;
+  gap: 4px;
+}
+
+.pending-product strong {
+  font-size: 17px;
+}
+
+.pending-product span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pending-total {
+  align-items: center;
+  background: #f7f9fb;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  font-size: 20px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.pending-total span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .status {
   background: #eef3f4;
   border-radius: 999px;
@@ -616,6 +716,29 @@ th {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 10px;
+}
+
+.reservation-table strong {
+  font-size: 16px;
+}
+
+.reservation-products summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.status-badge {
+  background: #eef3f4;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 850;
+  padding: 6px 10px;
+}
+
+.status-badge.done {
+  background: #edf9f1;
+  color: var(--success);
 }
 
 .job.printed {
@@ -661,7 +784,8 @@ pre {
   }
 
   .cashier-layout,
-  .two-column {
+  .two-column,
+  .review-layout {
     grid-template-columns: 1fr;
   }
 
@@ -718,9 +842,19 @@ pre {
   }
 
   .section-header,
+  .page-header,
   .inline-form {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .order-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pending-order-row {
+    grid-template-columns: 1fr;
   }
 
   th,

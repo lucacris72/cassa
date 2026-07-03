@@ -142,3 +142,46 @@ class PrintJob(Base):
 
     order: Mapped[Order] = relationship(back_populates="print_jobs")
     printer: Mapped[Printer | None] = relationship(back_populates="print_jobs")
+
+
+class Reservation(Base):
+    __tablename__ = "reservations"
+    __table_args__ = (UniqueConstraint("source_key", name="uq_reservation_source_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_file: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_row: Mapped[int] = mapped_column(Integer, nullable=False)
+    response_timestamp: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    first_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    participant_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    booking_type: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    acknowledgement: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="imported")
+    total_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id"), nullable=True)
+    imported_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+
+    items: Mapped[list[ReservationItem]] = relationship(
+        back_populates="reservation",
+        cascade="all, delete-orphan",
+        order_by="ReservationItem.id",
+    )
+    order: Mapped[Order | None] = relationship()
+
+
+class ReservationItem(Base):
+    __tablename__ = "reservation_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reservation_id: Mapped[int] = mapped_column(ForeignKey("reservations.id"), nullable=False)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"), nullable=True)
+    product_name: Mapped[str] = mapped_column(String(180), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit_price_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    line_total_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    reservation: Mapped[Reservation] = relationship(back_populates="items")
+    product: Mapped[Product | None] = relationship()
