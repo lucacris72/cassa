@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from starlette.middleware.sessions import SessionMiddleware
 
 from .config import get_settings, resolve_project_path
@@ -27,6 +28,12 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="Cassa Ristorante Locale", lifespan=lifespan)
     app.add_middleware(SessionMiddleware, secret_key=settings.secret_key, same_site="lax")
+
+    @app.get("/healthz", include_in_schema=False)
+    def healthz():
+        with get_session_factory()() as db:
+            db.execute(text("SELECT 1"))
+        return {"status": "ok"}
 
     static_dir = resolve_project_path(Path("restaurant_pos/app/static"))
     app.mount("/static", StaticFiles(directory=static_dir), name="static")

@@ -1,0 +1,17 @@
+[Unit]
+Description=Cassa Ristorante Locale
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/cassa
+EnvironmentFile=/opt/cassa/.env
+ExecStart=/opt/cassa/.venv/bin/uvicorn restaurant_pos.app.main:app --host ${APP_HOST} --port ${APP_PORT}
+Restart=on-failure
+RestartSec=5
+User=parrocchia
+Group=parrocchia
+
+[Install]
+WantedBy=multi-user.target

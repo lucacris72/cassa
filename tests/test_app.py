@@ -41,6 +41,12 @@ def test_main_pages_render(admin_client):
         assert response.status_code == 200, path
 
 
+def test_healthcheck(client):
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 def test_admin_crud_pages(admin_client, db_session):
     printer_response = admin_client.post(
         "/printers",
