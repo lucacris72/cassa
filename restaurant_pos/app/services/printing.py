@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import socket
 import textwrap
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +18,10 @@ from ..utils import format_money
 
 
 class PrintError(RuntimeError):
+    pass
+
+
+class NetworkPrintError(PrintError):
     pass
 
 
@@ -38,6 +43,7 @@ class UsbPrinterDevice:
 
 CUSTOMER_TICKET_WIDTH = 38
 PRODUCTION_TICKET_WIDTH = 42
+NETWORK_RETRY_DELAYS_SECONDS = (0.5, 1.5)
 
 
 def _order_label(order: Order) -> str:
@@ -273,7 +279,7 @@ def _send_network_escpos(job: PrintJob, printer: Printer, order: Order) -> None:
         with socket.create_connection((printer.ip, printer.port), timeout=5) as conn:
             conn.sendall(data)
     except OSError as exc:
-        raise PrintError(str(exc)) from exc
+        raise NetworkPrintError(str(exc)) from exc
 
 
 def _usb_modules() -> tuple[Any, Any, Any]:
@@ -532,13 +538,32 @@ def _dispatch(job: PrintJob, order: Order, printer: Printer) -> None:
     raise PrintError(f"Tipo stampante non supportato: {printer.type}")
 
 
+def _dispatch_with_retries(job: PrintJob, order: Order, printer: Printer) -> None:
+    if printer.type != "network_escpos":
+        _dispatch(job, order, printer)
+        return
+
+    attempts = len(NETWORK_RETRY_DELAYS_SECONDS) + 1
+    last_error: NetworkPrintError | None = None
+    for attempt in range(attempts):
+        try:
+            _dispatch(job, order, printer)
+            return
+        except NetworkPrintError as exc:
+            last_error = exc
+            if attempt == attempts - 1:
+                break
+            time.sleep(NETWORK_RETRY_DELAYS_SECONDS[attempt])
+    raise PrintError(f"Connessione stampante fallita dopo {attempts} tentativi: {last_error}") from last_error
+
+
 def _save_and_attempt(db: Session, order: Order, printer: Printer, job_type: str, payload_text: str) -> PrintJob:
     job = PrintJob(order_id=order.id, printer_id=printer.id, job_type=job_type, status="pending", payload_text=payload_text)
     db.add(job)
     db.commit()
     db.refresh(job)
     try:
-        _dispatch(job, order, printer)
+        _dispatch_with_retries(job, order, printer)
     except Exception as exc:
         job.status = "failed"
         job.error_message = str(exc)

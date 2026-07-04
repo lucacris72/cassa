@@ -408,17 +408,46 @@ def test_failed_network_printer_job_is_recorded(db_session, monkeypatch):
     customer_printer.type = "network_escpos"
     customer_printer.ip = "192.0.2.10"
     db_session.commit()
+    attempts = []
 
     def fail_network(job, printer, order):
-        raise printing.PrintError("offline")
+        attempts.append(job.id)
+        raise printing.NetworkPrintError("offline")
 
+    monkeypatch.setattr(printing, "NETWORK_RETRY_DELAYS_SECONDS", (0, 0))
     monkeypatch.setattr(printing, "_send_network_escpos", fail_network)
     product = db_session.scalar(select(Product).where(Product.name == "Panino salamella"))
     order = create_confirmed_order(db_session, parse_cart_json(json.dumps([{"product_id": product.id, "quantity": 1}])), source="test")
     result = printing.print_order(db_session, order.id, include_customer=True, include_production=False)
     assert result.jobs[0].status == "failed"
     assert "offline" in result.jobs[0].error_message
+    assert "3 tentativi" in result.jobs[0].error_message
+    assert len(attempts) == 3
     assert db_session.get(Order, order.id) is not None
+
+
+def test_network_printer_retry_can_recover(db_session, monkeypatch):
+    customer_printer = db_session.scalar(select(Printer).where(Printer.is_customer_printer.is_(True)))
+    customer_printer.type = "network_escpos"
+    customer_printer.ip = "192.0.2.10"
+    db_session.commit()
+    attempts = []
+
+    def flaky_network(job, printer, order):
+        attempts.append(job.id)
+        if len(attempts) == 1:
+            raise printing.NetworkPrintError("temporary timeout")
+
+    monkeypatch.setattr(printing, "NETWORK_RETRY_DELAYS_SECONDS", (0, 0))
+    monkeypatch.setattr(printing, "_send_network_escpos", flaky_network)
+    product = db_session.scalar(select(Product).where(Product.name == "Panino salamella"))
+    order = create_confirmed_order(db_session, parse_cart_json(json.dumps([{"product_id": product.id, "quantity": 1}])), source="test")
+
+    result = printing.print_order(db_session, order.id, include_customer=True, include_production=False)
+
+    assert result.jobs[0].status == "printed"
+    assert result.jobs[0].error_message is None
+    assert len(attempts) == 2
 
 
 def test_usb_printer_job_dispatch_is_recorded(db_session, monkeypatch):
