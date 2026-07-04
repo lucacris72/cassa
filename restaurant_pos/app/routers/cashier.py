@@ -96,7 +96,7 @@ def create_order(
                 notes=notes.strip() or None,
                 mark_paid=mark_paid,
             )
-        result = print_order(db, order.id)
+        result = print_order(db, order.id, customer_printer_id=user.customer_printer_id)
     except order_service.OrderError as exc:
         add_flash(request, str(exc), "error")
         return RedirectResponse("/", status_code=303)

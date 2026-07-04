@@ -5,6 +5,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
+from restaurant_pos.app.auth import hash_pin
 from restaurant_pos.app.models import Category, Order, OrderItem, Printer, PrintJob, Product, ProductImportAlias, RegisterClosure, Reservation, ReservationItem, User
 from restaurant_pos.app.services import printing
 from restaurant_pos.app.services.numbering import business_date_for
@@ -35,7 +36,7 @@ def test_login_valid_and_invalid(client):
 
 
 def test_main_pages_render(admin_client):
-    for path in ["/", "/orders", "/reservations", "/closures", "/products", "/categories", "/printers", "/mobile"]:
+    for path in ["/", "/orders", "/reservations", "/closures", "/products", "/categories", "/printers", "/users", "/mobile"]:
         response = admin_client.get(path)
         assert response.status_code == 200, path
 
@@ -134,6 +135,82 @@ def test_category_can_be_hidden_from_cashier_without_deactivation(admin_client, 
     assert mobile_page.status_code == 200
     assert f'data-category-filter="{category.id}"' not in mobile_page.text
     assert "Panino salamella" not in mobile_page.text
+
+
+def test_admin_can_create_cashier_with_assigned_customer_printer(admin_client, db_session):
+    default_customer = db_session.scalar(select(Printer).where(Printer.is_customer_printer.is_(True)))
+
+    printer_response = admin_client.post(
+        "/printers",
+        data={
+            "name": "Cassa 2 Cliente",
+            "type": "fake",
+            "port": "9100",
+            "enabled": "true",
+            "is_customer_printer": "true",
+        },
+        follow_redirects=False,
+    )
+    assert printer_response.status_code == 303
+    second_customer = db_session.scalar(select(Printer).where(Printer.name == "Cassa 2 Cliente"))
+    assert second_customer is not None
+    db_session.refresh(default_customer)
+    assert default_customer.is_customer_printer is True
+
+    user_response = admin_client.post(
+        "/users",
+        data={
+            "name": "cassa2",
+            "pin": "2222",
+            "role": "cashier",
+            "active": "true",
+            "customer_printer_id": str(second_customer.id),
+        },
+        follow_redirects=False,
+    )
+    assert user_response.status_code == 303
+    user = db_session.scalar(select(User).where(User.name == "cassa2"))
+    assert user is not None
+    assert user.role == "cashier"
+    assert user.customer_printer_id == second_customer.id
+
+    users_page = admin_client.get("/users")
+    assert users_page.status_code == 200
+    assert "cassa2" in users_page.text
+    assert "Cassa 2 Cliente" in users_page.text
+
+
+def test_logged_in_cashier_uses_assigned_customer_printer(client, db_session):
+    assigned_printer = Printer(name="Cassa 2 Cliente", type="fake", enabled=True, is_customer_printer=True)
+    db_session.add(assigned_printer)
+    db_session.flush()
+    cashier = User(
+        name="cassa2",
+        pin_hash=hash_pin("2222"),
+        role="cashier",
+        active=True,
+        customer_printer_id=assigned_printer.id,
+    )
+    db_session.add(cashier)
+    db_session.commit()
+    db_session.refresh(assigned_printer)
+
+    login = client.post("/login", data={"pin": "2222"}, follow_redirects=False)
+    assert login.status_code == 303
+    product = db_session.scalar(select(Product).where(Product.name == "Acqua"))
+    response = client.post(
+        "/orders",
+        data={"cart_json": json.dumps([{"product_id": product.id, "quantity": 1}])},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    order = db_session.scalar(select(Order).order_by(Order.id.desc()))
+    customer_job = db_session.scalar(
+        select(PrintJob).where(PrintJob.order_id == order.id, PrintJob.job_type == "customer")
+    )
+    assert customer_job is not None
+    assert customer_job.printer_id == assigned_printer.id
 
 
 def test_printer_delete_unassigns_references(admin_client, db_session):

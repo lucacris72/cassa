@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Utenti{% endblock %}
+{% block content %}
+  <section class="two-column">
+    <form method="post" action="/users" class="panel stack">
+      <h1>Nuovo utente</h1>
+      <label>Nome <input name="name" required></label>
+      <label>PIN <input name="pin" inputmode="numeric" pattern="[0-9]+" required></label>
+      <label>
+        Ruolo
+        <select name="role">
+          <option value="cashier">Cassa</option>
+          <option value="waiter">Cameriere</option>
+          <option value="admin">Admin</option>
+        </select>
+      </label>
+      <label>
+        Stampante cliente
+        <select name="customer_printer_id">
+          <option value="0">Predefinita</option>
+          {% for printer in customer_printers %}
+            <option value="{{ printer.id }}">{{ printer.name }}{% if not printer.enabled %} · disabilitata{% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="checkbox"><input type="checkbox" name="active" value="true" checked> Attivo</label>
+      <button class="button primary" type="submit">Salva</button>
+    </form>
+
+    <section class="panel">
+      <h1>Utenti</h1>
+      <table>
+        <thead>
+          <tr><th>Nome</th><th>Ruolo</th><th>Stampante cliente</th><th>Stato</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for account in users %}
+            <tr>
+              <td>{{ account.name }}</td>
+              <td>
+                {% if account.role == "cashier" %}Cassa{% elif account.role == "waiter" %}Cameriere{% else %}Admin{% endif %}
+              </td>
+              <td>{{ account.customer_printer.name if account.customer_printer else "Predefinita" }}</td>
+              <td>{{ "Attivo" if account.active else "Disattivo" }}</td>
+              <td><a class="button small" href="/users/{{ account.id }}/edit">Modifica</a></td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="5">Nessun utente configurato.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </section>
+{% endblock %}

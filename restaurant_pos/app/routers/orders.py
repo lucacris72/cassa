@@ -128,7 +128,7 @@ def confirm_pending(
 ):
     try:
         order = order_service.confirm_pending_order(db, order_id)
-        result = print_order(db, order.id)
+        result = print_order(db, order.id, customer_printer_id=user.customer_printer_id)
     except Exception as exc:
         add_flash(request, f"Conferma fallita: {exc}", "error")
         return RedirectResponse(f"/orders/{order_id}", status_code=303)
@@ -145,7 +145,7 @@ def reprint_customer(
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin", "cashier")),
 ):
-    result = print_order(db, order_id, include_customer=True, include_production=False)
+    result = print_order(db, order_id, include_customer=True, include_production=False, customer_printer_id=user.customer_printer_id)
     for warning in result.warnings:
         add_flash(request, warning, "warning")
     add_flash(request, "Ristampa cliente richiesta", "success")

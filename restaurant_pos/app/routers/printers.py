@@ -72,9 +72,6 @@ def create_printer(
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin")),
 ):
-    if is_customer_printer:
-        for printer in db.scalars(select(Printer).where(Printer.is_customer_printer.is_(True))):
-            printer.is_customer_printer = False
     db.add(
         Printer(
             name=name.strip(),
@@ -131,9 +128,6 @@ def edit_printer(
     if printer is None:
         add_flash(request, "Stampante non trovata", "error")
         return RedirectResponse("/printers", status_code=303)
-    if is_customer_printer:
-        for other in db.scalars(select(Printer).where(Printer.is_customer_printer.is_(True), Printer.id != printer.id)):
-            other.is_customer_printer = False
     printer.name = name.strip()
     printer.type = type
     printer.ip = ip.strip() or None
@@ -149,6 +143,7 @@ def _delete_printer(db: Session, printer: Printer) -> None:
     db.execute(update(Category).where(Category.printer_id == printer.id).values(printer_id=None))
     db.execute(update(OrderItem).where(OrderItem.printer_id == printer.id).values(printer_id=None))
     db.execute(update(PrintJob).where(PrintJob.printer_id == printer.id).values(printer_id=None))
+    db.execute(update(User).where(User.customer_printer_id == printer.id).values(customer_printer_id=None))
     db.delete(printer)
 
 

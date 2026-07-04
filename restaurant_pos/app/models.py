@@ -127,6 +127,9 @@ class User(Base):
     pin_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(40), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    customer_printer_id: Mapped[int | None] = mapped_column(ForeignKey("printers.id"), nullable=True)
+
+    customer_printer: Mapped[Printer | None] = relationship()
 
 
 class RegisterClosure(Base):

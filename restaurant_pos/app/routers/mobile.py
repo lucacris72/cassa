@@ -62,7 +62,7 @@ def create_mobile_order(
     try:
         lines = order_service.parse_cart_json(cart_json)
         order = order_service.create_confirmed_order(db, lines, source="mobile", notes=notes.strip() or None)
-        result = print_order(db, order.id)
+        result = print_order(db, order.id, customer_printer_id=user.customer_printer_id)
     except Exception as exc:
         add_flash(request, f"Ordine mobile non salvato: {exc}", "error")
         return RedirectResponse("/mobile", status_code=303)

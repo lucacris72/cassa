@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Modifica utente{% endblock %}
+{% block content %}
+  <form method="post" action="/users/{{ edited_user.id }}/edit" class="panel stack narrow">
+    <h1>Modifica utente</h1>
+    <label>Nome <input name="name" value="{{ edited_user.name }}" required></label>
+    <label>
+      Ruolo
+      <select name="role">
+        <option value="cashier" {% if edited_user.role == "cashier" %}selected{% endif %}>Cassa</option>
+        <option value="waiter" {% if edited_user.role == "waiter" %}selected{% endif %}>Cameriere</option>
+        <option value="admin" {% if edited_user.role == "admin" %}selected{% endif %}>Admin</option>
+      </select>
+    </label>
+    <label>
+      Stampante cliente
+      <select name="customer_printer_id">
+        <option value="0">Predefinita</option>
+        {% for printer in customer_printers %}
+          <option value="{{ printer.id }}" {% if edited_user.customer_printer_id == printer.id %}selected{% endif %}>
+            {{ printer.name }}{% if not printer.enabled %} · disabilitata{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Nuovo PIN <input name="pin" inputmode="numeric" pattern="[0-9]+" placeholder="Lascia vuoto per non cambiare"></label>
+    <label class="checkbox"><input type="checkbox" name="active" value="true" {% if edited_user.active %}checked{% endif %}> Attivo</label>
+    <div class="actions">
+      <button class="button primary" type="submit">Salva</button>
+      <a class="button" href="/users">Annulla</a>
+    </div>
+  </form>
+{% endblock %}

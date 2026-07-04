@@ -563,13 +563,21 @@ def print_order(
     *,
     include_customer: bool = True,
     include_production: bool = True,
+    customer_printer_id: int | None = None,
 ) -> PrintResult:
     order = load_order_for_printing(db, order_id)
     jobs: list[PrintJob] = []
     warnings: list[str] = []
 
     if include_customer:
-        customer_printer = db.scalar(
+        customer_printer = None
+        if customer_printer_id is not None:
+            assigned_printer = db.get(Printer, customer_printer_id)
+            if assigned_printer is not None and assigned_printer.enabled and assigned_printer.is_customer_printer:
+                customer_printer = assigned_printer
+            else:
+                warnings.append("Stampante cliente assegnata non disponibile; uso la predefinita")
+        customer_printer = customer_printer or db.scalar(
             select(Printer)
             .where(Printer.is_customer_printer.is_(True), Printer.enabled.is_(True))
             .order_by(Printer.id)
