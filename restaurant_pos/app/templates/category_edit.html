@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Modifica categoria{% endblock %}
 {% block content %}
-  <form method="post" action="/categories/{{ category.id }}/edit" class="panel stack narrow">
+  <form id="category-edit" method="post" action="/categories/{{ category.id }}/edit" class="panel stack narrow">
     <h1>Modifica categoria</h1>
+    <p class="muted">{{ category.products|length }} prodotti collegati</p>
     <label>Nome <input name="name" value="{{ category.name }}" required></label>
     <label>
       Stampante produzione
@@ -22,7 +23,9 @@
     </label>
     <div class="actions">
       <button class="button primary" type="submit">Salva</button>
+      <button class="button danger" type="submit" form="category-delete" onclick="return confirm('Eliminare questa categoria? Le categorie con prodotti collegati non verranno eliminate.')">Elimina</button>
       <a class="button" href="/categories">Annulla</a>
     </div>
   </form>
+  <form id="category-delete" method="post" action="/categories/{{ category.id }}/delete"></form>
 {% endblock %}

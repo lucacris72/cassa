@@ -148,6 +148,40 @@ def test_category_can_be_hidden_from_cashier_without_deactivation(admin_client, 
     assert "Panino salamella" not in mobile_page.text
 
 
+def test_category_delete_requires_no_products(admin_client, db_session):
+    response = admin_client.post(
+        "/categories",
+        data={"name": "Categoria vuota", "printer_id": "0", "sort_order": "99"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    empty_category = db_session.scalar(select(Category).where(Category.name == "Categoria vuota"))
+    assert empty_category is not None
+    empty_category_id = empty_category.id
+
+    categories_page = admin_client.get("/categories")
+    assert categories_page.status_code == 200
+    assert "Elimina" in categories_page.text
+
+    delete_empty = admin_client.post(f"/categories/{empty_category_id}/delete", follow_redirects=False)
+    assert delete_empty.status_code == 303
+    assert delete_empty.headers["location"] == "/categories"
+    db_session.expire_all()
+    assert db_session.get(Category, empty_category_id) is None
+
+    cucina = db_session.scalar(select(Category).where(Category.name == "Cucina"))
+    assert cucina is not None
+    cucina_id = cucina.id
+    product_count = len(cucina.products)
+    assert product_count > 0
+
+    delete_used = admin_client.post(f"/categories/{cucina_id}/delete", follow_redirects=False)
+    assert delete_used.status_code == 303
+    db_session.expire_all()
+    assert db_session.get(Category, cucina_id) is not None
+    assert len(db_session.get(Category, cucina_id).products) == product_count
+
+
 def test_long_product_names_have_stable_cashier_markup(admin_client, db_session):
     category = db_session.scalar(select(Category).where(Category.name == "Cucina"))
     long_name = "INSALATA MISTA - SENZA GLUTINE E SENZA LATTOSIO"

@@ -27,13 +27,14 @@
       <h1>Categorie</h1>
       <table>
         <thead>
-          <tr><th>Nome</th><th>Stampante</th><th>Stato</th><th>Cassa</th><th></th></tr>
+          <tr><th>Nome</th><th>Stampante</th><th>Prodotti</th><th>Stato</th><th>Cassa</th><th></th></tr>
         </thead>
         <tbody>
           {% for category in categories %}
             <tr>
               <td>{{ category.name }}</td>
               <td>{{ category.printer.name if category.printer else "Nessuna" }}</td>
+              <td>{{ category.products|length }}</td>
               <td>{{ "Attiva" if category.active else "Disattiva" }}</td>
               <td>
                 <form method="post" action="/categories/{{ category.id }}/toggle-cashier-visibility">
@@ -42,7 +43,12 @@
                   </button>
                 </form>
               </td>
-              <td><a class="button small" href="/categories/{{ category.id }}/edit">Modifica</a></td>
+              <td class="actions">
+                <a class="button small" href="/categories/{{ category.id }}/edit">Modifica</a>
+                <form method="post" action="/categories/{{ category.id }}/delete">
+                  <button class="button small danger" type="submit" onclick="return confirm('Eliminare questa categoria? Le categorie con prodotti collegati non verranno eliminate.')">Elimina</button>
+                </form>
+              </td>
             </tr>
           {% endfor %}
         </tbody>

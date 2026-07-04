@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..auth import add_flash, pop_flashes, require_user
 from ..database import get_db
-from ..models import Category, Printer, User
+from ..models import Category, Printer, Product, User
 from ..templating import render
 
 
@@ -25,7 +25,9 @@ def categories_page(
     user: User = Depends(require_user("admin")),
 ):
     categories = db.scalars(
-        select(Category).options(selectinload(Category.printer)).order_by(Category.active.desc(), Category.sort_order, Category.name)
+        select(Category)
+        .options(selectinload(Category.printer), selectinload(Category.products))
+        .order_by(Category.active.desc(), Category.sort_order, Category.name)
     ).all()
     return render(
         request,
@@ -69,7 +71,11 @@ def edit_category_page(
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin")),
 ):
-    category = db.get(Category, category_id)
+    category = db.scalar(
+        select(Category)
+        .where(Category.id == category_id)
+        .options(selectinload(Category.products))
+    )
     if category is None:
         add_flash(request, "Categoria non trovata", "error")
         return RedirectResponse("/categories", status_code=303)
@@ -108,6 +114,38 @@ def edit_category(
     category.show_in_cashier = show_in_cashier
     db.commit()
     add_flash(request, "Categoria aggiornata", "success")
+    return RedirectResponse("/categories", status_code=303)
+
+
+@router.post("/{category_id}/delete")
+def delete_category(
+    category_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user("admin")),
+):
+    category = db.get(Category, category_id)
+    if category is None:
+        add_flash(request, "Categoria non trovata", "error")
+        return RedirectResponse("/categories", status_code=303)
+
+    products_count = db.scalar(select(func.count(Product.id)).where(Product.category_id == category.id)) or 0
+    if products_count:
+        add_flash(
+            request,
+            f"Categoria non eliminata: contiene {products_count} prodotti. Spostali o eliminali prima.",
+            "error",
+        )
+        return RedirectResponse("/categories", status_code=303)
+
+    category_name = category.name
+    try:
+        db.delete(category)
+        db.commit()
+        add_flash(request, f"Categoria eliminata: {category_name}", "success")
+    except Exception as exc:
+        db.rollback()
+        add_flash(request, f"Categoria non eliminata: {exc}", "error")
     return RedirectResponse("/categories", status_code=303)
 
 
