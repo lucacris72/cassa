@@ -17,15 +17,17 @@ python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt
 sudo cp deploy/cassa.service /etc/systemd/system/cassa.service
+sudo cp deploy/sudoers-cassa /etc/sudoers.d/cassa
+sudo chmod 440 /etc/sudoers.d/cassa
 sudo systemctl daemon-reload
 sudo systemctl enable --now cassa
-curl http://127.0.0.1:8000/healthz
+curl http://192.168.5.90:18000/healthz
 ```
 
 Impostare in `.env` almeno:
 
 ```bash
-APP_HOST=0.0.0.0
+APP_HOST=192.168.5.90
 APP_PORT=18000
 DATABASE_URL=sqlite:////opt/cassa/data/app.db
 PRINT_OUTPUT_DIR=/opt/cassa/print_output

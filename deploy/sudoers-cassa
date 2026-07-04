@@ -1,0 +1,1 @@
+parrocchia ALL=(root) NOPASSWD: /usr/bin/systemctl restart cassa, /usr/bin/systemctl --no-pager --full status cassa

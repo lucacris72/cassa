@@ -21,8 +21,8 @@ fi
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt
 
-sudo systemctl restart "$SERVICE_NAME"
-sudo systemctl --no-pager --full status "$SERVICE_NAME"
+sudo -n systemctl restart "$SERVICE_NAME"
+sudo -n systemctl --no-pager --full status "$SERVICE_NAME"
 
 if [[ -f "$ENV_FILE" ]]; then
   set -a
