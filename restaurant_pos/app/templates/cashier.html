@@ -21,8 +21,10 @@
             data-category-id="{{ product.category_id }}"
             data-name="{{ product.name }}"
             data-price-cents="{{ product.price_cents }}"
+            title="{{ product.name }}"
+            aria-label="{{ product.name }} {{ product.price_cents|money }}"
           >
-            <span>{{ product.name }}</span>
+            <span class="product-name">{{ product.name }}</span>
             <strong>{{ product.price_cents|money }}</strong>
           </button>
         {% endfor %}

@@ -137,6 +137,23 @@ def test_category_can_be_hidden_from_cashier_without_deactivation(admin_client, 
     assert "Panino salamella" not in mobile_page.text
 
 
+def test_long_product_names_have_stable_cashier_markup(admin_client, db_session):
+    category = db_session.scalar(select(Category).where(Category.name == "Cucina"))
+    long_name = "INSALATA MISTA - SENZA GLUTINE E SENZA LATTOSIO"
+    db_session.add(Product(name=long_name, price_cents=700, category_id=category.id, active=True, sort_order=999))
+    db_session.commit()
+
+    cashier_page = admin_client.get("/")
+    assert cashier_page.status_code == 200
+    assert f'title="{long_name}"' in cashier_page.text
+    assert '<span class="product-name">INSALATA MISTA - SENZA GLUTINE E SENZA LATTOSIO</span>' in cashier_page.text
+
+    mobile_page = admin_client.get("/mobile")
+    assert mobile_page.status_code == 200
+    assert f'title="{long_name}"' in mobile_page.text
+    assert '<span class="product-name">INSALATA MISTA - SENZA GLUTINE E SENZA LATTOSIO</span>' in mobile_page.text
+
+
 def test_admin_can_create_cashier_with_assigned_customer_printer(admin_client, db_session):
     default_customer = db_session.scalar(select(Printer).where(Printer.is_customer_printer.is_(True)))
 

@@ -286,14 +286,14 @@ button:hover {
 
 .product-button {
   align-items: stretch;
-  aspect-ratio: 1.55;
   background: #fff;
   border: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  justify-content: space-between;
-  padding: 14px;
+  display: grid;
+  gap: 8px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 126px;
+  overflow: hidden;
+  padding: 12px 14px;
   text-align: left;
 }
 
@@ -302,15 +302,24 @@ button:hover {
   display: none;
 }
 
-.product-button span {
-  font-size: 18px;
+.product-button .product-name {
+  align-self: center;
+  display: -webkit-box;
+  font-size: 16px;
   font-weight: 850;
-  line-height: 1.15;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-height: 1.12;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .product-button strong {
+  align-self: end;
   color: var(--primary);
   font-size: 16px;
+  line-height: 1.1;
 }
 
 .cart-items {
@@ -868,7 +877,17 @@ pre {
 }
 
 .mobile-order-page .product-button {
-  min-height: 96px;
+  height: 112px;
+  padding: 10px 12px;
+}
+
+.mobile-order-page .product-button .product-name {
+  font-size: 14px;
+  -webkit-line-clamp: 4;
+}
+
+.mobile-order-page .product-button strong {
+  font-size: 14px;
 }
 
 .mobile-order-page .button,
@@ -944,8 +963,26 @@ pre {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .product-button span {
+  .product-button {
+    height: 118px;
+    padding: 10px 12px;
+  }
+
+  .product-button .product-name {
     font-size: 15px;
+    -webkit-line-clamp: 4;
+  }
+
+  .product-button strong {
+    font-size: 14px;
+  }
+
+  .mobile-order-page .product-button {
+    height: 108px;
+  }
+
+  .mobile-order-page .product-button .product-name {
+    font-size: 14px;
   }
 
   .section-header,
