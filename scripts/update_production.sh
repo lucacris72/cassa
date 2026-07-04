@@ -31,7 +31,11 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-health_url="http://${APP_HOST:-127.0.0.1}:${APP_PORT:-8000}/healthz"
+health_host="${APP_HOST:-127.0.0.1}"
+if [[ "$health_host" == "0.0.0.0" || "$health_host" == "::" ]]; then
+  health_host="127.0.0.1"
+fi
+health_url="http://${health_host}:${APP_PORT:-8000}/healthz"
 for _ in $(seq 1 30); do
   if response="$(curl -fsS "$health_url" 2>/dev/null)"; then
     printf '%s\n' "$response"

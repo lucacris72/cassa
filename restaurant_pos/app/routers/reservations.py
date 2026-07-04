@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -41,7 +41,6 @@ def reservations_page(
             "reservations": reservations,
             "q": q,
             "status": status,
-            "default_import_path": "prenotazioni.xlsx",
         },
     )
 
@@ -49,12 +48,14 @@ def reservations_page(
 @router.post("/import")
 def import_reservations(
     request: Request,
-    import_path: str = Form("prenotazioni.xlsx"),
+    import_file: Annotated[UploadFile | None, File()] = None,
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin", "cashier")),
 ):
     try:
-        result = reservation_service.import_reservations_from_xlsx(db, import_path)
+        if import_file is None:
+            raise reservation_service.ReservationImportError("Seleziona un file prenotazioni da importare")
+        result = reservation_service.import_reservations_from_upload(db, import_file.file, import_file.filename or "")
     except Exception as exc:
         add_flash(request, f"Import prenotazioni fallito: {exc}", "error")
     else:

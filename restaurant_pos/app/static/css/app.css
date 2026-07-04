@@ -684,6 +684,16 @@ th {
   gap: 8px;
 }
 
+.import-form {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.import-form input[type="file"] {
+  max-width: 360px;
+  min-width: 260px;
+}
+
 .order-list {
   display: grid;
   gap: 8px;

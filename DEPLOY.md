@@ -21,13 +21,13 @@ sudo cp deploy/sudoers-cassa /etc/sudoers.d/cassa
 sudo chmod 440 /etc/sudoers.d/cassa
 sudo systemctl daemon-reload
 sudo systemctl enable --now cassa
-curl http://192.168.5.90:18000/healthz
+curl http://127.0.0.1:18000/healthz
 ```
 
 Impostare in `.env` almeno:
 
 ```bash
-APP_HOST=192.168.5.90
+APP_HOST=0.0.0.0
 APP_PORT=18000
 DATABASE_URL=sqlite:////opt/cassa/data/app.db
 PRINT_OUTPUT_DIR=/opt/cassa/print_output
@@ -68,9 +68,18 @@ sudo crontab -e
 sudo systemctl status cassa
 sudo journalctl -u cassa -f
 sudo systemctl restart cassa
+curl http://127.0.0.1:18000/healthz
 curl http://192.168.5.90:18000/healthz
+curl http://10.0.0.102:18000/healthz
 ```
 
 ## Note rete
 
-Per una rete dedicata alla cassa, lasciare stampanti e client con IP statici. Su questa VM la porta `8000` e gia occupata da un container, quindi la cassa usa `http://192.168.5.90:18000`. In alternativa puo essere pubblicata via Nginx Proxy Manager verso upstream `192.168.5.90:18000`.
+Per una rete dedicata alla cassa, lasciare stampanti e client con IP statici. Su questa VM la porta `8000` e gia occupata da un container, quindi la cassa usa la porta `18000` e ascolta su tutte le interfacce con `APP_HOST=0.0.0.0`.
+
+Accessi diretti previsti:
+
+- rete cassa: `http://192.168.5.90:18000`
+- rete servizi/internet: `http://10.0.0.102:18000`
+
+In alternativa puo essere pubblicata via Nginx Proxy Manager verso upstream `127.0.0.1:18000` oppure `192.168.5.90:18000`.

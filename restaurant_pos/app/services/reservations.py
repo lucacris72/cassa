@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -163,24 +163,25 @@ def _product_for_column(db: Session, column: ProductColumn, category: Category) 
     return product, created, updated
 
 
+def _validate_import_filename(filename: str) -> str:
+    source_name = Path((filename or "").strip()).name
+    if not source_name:
+        raise ReservationImportError("Seleziona un file prenotazioni da importare")
+    if Path(source_name).suffix.lower() not in {".xlsx", ".xlsm"}:
+        raise ReservationImportError("Formato non supportato: usa un file .xlsx scaricato da Google Moduli")
+    return source_name
+
+
 def _resolve_import_path(import_path: str) -> Path:
     path = Path(import_path.strip() or "prenotazioni.xlsx")
+    _validate_import_filename(path.name)
     resolved = resolve_project_path(path)
     if not resolved.exists():
         raise ReservationImportError(f"File non trovato: {resolved}")
-    if resolved.suffix.lower() not in {".xlsx", ".xlsm"}:
-        raise ReservationImportError("Formato non supportato: usa un file .xlsx scaricato da Google Moduli")
     return resolved
 
 
-def import_reservations_from_xlsx(db: Session, import_path: str) -> ImportResult:
-    try:
-        import openpyxl
-    except ImportError as exc:
-        raise ReservationImportError("openpyxl non installato: esegui pip install -r requirements.txt") from exc
-
-    resolved = _resolve_import_path(import_path)
-    workbook = openpyxl.load_workbook(resolved, data_only=True)
+def _import_reservations_from_workbook(db: Session, workbook: Any, source_name: str) -> ImportResult:
     sheet = workbook.worksheets[0]
     rows = list(sheet.iter_rows(values_only=True))
     if len(rows) < 2:
@@ -203,7 +204,6 @@ def import_reservations_from_xlsx(db: Session, import_path: str) -> ImportResult
     created_count = 0
     updated_count = 0
     skipped_count = 0
-    source_name = resolved.name
 
     for row_number, row in enumerate(rows[1:], start=2):
         timestamp = _timestamp_text(row[columns["timestamp"]] if columns["timestamp"] < len(row) else None)
@@ -278,6 +278,29 @@ def import_reservations_from_xlsx(db: Session, import_path: str) -> ImportResult
         products_created=products_created,
         products_updated=products_updated,
     )
+
+
+def import_reservations_from_xlsx(db: Session, import_path: str) -> ImportResult:
+    try:
+        import openpyxl
+    except ImportError as exc:
+        raise ReservationImportError("openpyxl non installato: esegui pip install -r requirements.txt") from exc
+
+    resolved = _resolve_import_path(import_path)
+    workbook = openpyxl.load_workbook(resolved, data_only=True)
+    return _import_reservations_from_workbook(db, workbook, resolved.name)
+
+
+def import_reservations_from_upload(db: Session, file: BinaryIO, filename: str) -> ImportResult:
+    try:
+        import openpyxl
+    except ImportError as exc:
+        raise ReservationImportError("openpyxl non installato: esegui pip install -r requirements.txt") from exc
+
+    source_name = _validate_import_filename(filename)
+    file.seek(0)
+    workbook = openpyxl.load_workbook(file, data_only=True)
+    return _import_reservations_from_workbook(db, workbook, source_name)
 
 
 def search_reservations(db: Session, query: str = "", status: str = "open") -> list[Reservation]:

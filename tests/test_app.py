@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from io import BytesIO
 from pathlib import Path
 
 from sqlalchemy import select
@@ -673,6 +674,54 @@ def test_mobile_order_is_confirmed_printed_and_returns_to_mobile(cashier_client,
     assert order.status == "confirmed"
     assert order.order_number == 1
     assert db_session.scalars(select(PrintJob).where(PrintJob.order_id == order.id)).all()
+
+
+def test_reservation_import_upload_from_browser(admin_client, db_session):
+    import openpyxl
+
+    page = admin_client.get("/reservations")
+    assert page.status_code == 200
+    assert 'type="file"' in page.text
+    assert 'name="import_path"' not in page.text
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(
+        [
+            "Informazioni cronologiche",
+            "Indirizzo email",
+            "Cognome ",
+            "Nome",
+            "Numero di partecipanti",
+            "Tipologia di prenotazione",
+            "Liberatoria allergeni",
+            "€2,50 DOLCE PRENOTATO",
+        ]
+    )
+    sheet.append(["2026-07-01 09:30:00", "bianchi@example.com", "Bianchi", "Anna", 1, "Ospite", "Ok", 2])
+    upload = BytesIO()
+    workbook.save(upload)
+    upload.seek(0)
+
+    response = admin_client.post(
+        "/reservations/import",
+        files={
+            "import_file": (
+                "prenotazioni.xlsx",
+                upload,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/reservations"
+
+    db_session.expire_all()
+    reservation = db_session.scalar(select(Reservation).where(Reservation.last_name == "Bianchi"))
+    assert reservation is not None
+    assert reservation.source_file == "prenotazioni.xlsx"
+    assert reservation.total_cents == 500
 
 
 def test_reservation_import_and_checkout_from_cashier(admin_client, db_session, tmp_path):

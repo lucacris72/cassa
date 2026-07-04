@@ -6,8 +6,8 @@
       <h1>Prenotazioni</h1>
       <p>Importa le risposte del modulo, cerca il nome e apri la prenotazione nella cassa.</p>
     </div>
-    <form method="post" action="/reservations/import" class="inline-form">
-      <input name="import_path" value="{{ default_import_path }}" aria-label="File prenotazioni">
+    <form method="post" action="/reservations/import" class="inline-form import-form" enctype="multipart/form-data">
+      <input type="file" name="import_file" accept=".xlsx,.xlsm" aria-label="File prenotazioni" required>
       <button class="button primary" type="submit">Importa</button>
     </form>
   </section>
