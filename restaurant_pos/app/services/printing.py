@@ -576,6 +576,36 @@ def _save_and_attempt(db: Session, order: Order, printer: Printer, job_type: str
     return job
 
 
+def retry_failed_print_jobs(db: Session, order_id: int) -> PrintResult:
+    order = load_order_for_printing(db, order_id)
+    failed_jobs = [job for job in order.print_jobs if job.status == "failed"]
+    jobs: list[PrintJob] = []
+    warnings: list[str] = []
+
+    if not failed_jobs:
+        return PrintResult(jobs=[], warnings=["Nessuna stampa fallita da ritentare"])
+
+    for failed_job in failed_jobs:
+        printer = db.get(Printer, failed_job.printer_id) if failed_job.printer_id is not None else None
+        if printer is None:
+            warnings.append(f"Stampante non disponibile per job #{failed_job.id}")
+            continue
+
+        retry_job = _save_and_attempt(db, order, printer, failed_job.job_type, failed_job.payload_text)
+        jobs.append(retry_job)
+        failed_job.status = "retried"
+        failed_job.error_message = f"Ritentata con job #{retry_job.id}"
+        db.commit()
+
+        if retry_job.status == "failed":
+            warnings.append(
+                f"Ristampa {retry_job.job_type} fallita su {retry_job.printer.name if retry_job.printer else 'N/D'}: "
+                f"{retry_job.error_message}"
+            )
+
+    return PrintResult(jobs=jobs, warnings=warnings)
+
+
 def load_order_for_printing(db: Session, order_id: int) -> Order:
     order = db.scalar(
         select(Order)

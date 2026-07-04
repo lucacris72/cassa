@@ -25,6 +25,9 @@
       <div class="metric"><span>Totale</span><strong>{{ order.total_cents|money }}</strong></div>
       <div class="metric"><span>Righe</span><strong>{{ order.items|length }}</strong></div>
       <div class="metric"><span>Turno</span><strong>T{{ order.register_session }}</strong></div>
+      {% if failed_print_jobs %}
+        <div class="metric warning"><span>Stampe fallite</span><strong>{{ failed_print_jobs|length }}</strong></div>
+      {% endif %}
     </div>
 
     {% if order.status == "pending_confirmation" %}
@@ -95,6 +98,9 @@
         <h2>Azioni</h2>
         <div class="actions">
           <a class="button primary" href="/">Nuovo ordine</a>
+          {% if failed_print_jobs %}
+            <form method="post" action="/orders/{{ order.id }}/reprint/failed"><button class="button danger" type="submit">Riprova stampe fallite</button></form>
+          {% endif %}
           <form method="post" action="/orders/{{ order.id }}/reprint/customer"><button class="button" type="submit">Ristampa cliente</button></form>
           <form method="post" action="/orders/{{ order.id }}/reprint/production"><button class="button" type="submit">Ristampa produzione</button></form>
           <form method="post" action="/orders/{{ order.id }}/mark-paid"><button class="button" type="submit">Pagato</button></form>
@@ -109,7 +115,10 @@
       <div class="jobs">
         {% for job in order.print_jobs %}
           <details class="job {{ job.status }}">
-            <summary>{{ job.job_type }} · {{ job.status }} · {{ job.printer.name if job.printer else "N/D" }}</summary>
+            <summary>
+              {{ job.job_type }} · {{ job.status }} · {{ job.printer.name if job.printer else "N/D" }}
+              {% if job.status == "failed" %}<span class="status-badge failed">KO</span>{% endif %}
+            </summary>
             {% if job.error_message %}<p class="error-text">{{ job.error_message }}</p>{% endif %}
             <pre>{{ job.payload_text }}</pre>
           </details>

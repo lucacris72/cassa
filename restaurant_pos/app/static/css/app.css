@@ -696,7 +696,7 @@ th {
   border-radius: 8px;
   display: grid;
   gap: 8px;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1fr auto auto auto auto;
   padding: 12px;
 }
 
@@ -786,6 +786,10 @@ th {
   font-weight: 800;
 }
 
+.metric.warning {
+  border-color: #ffc5be;
+}
+
 .status {
   background: #eef3f4;
   border-radius: 999px;
@@ -846,12 +850,21 @@ th {
   color: var(--success);
 }
 
+.status-badge.failed {
+  background: #fff4f2;
+  color: var(--danger);
+}
+
 .job.printed {
   border-color: #a7e2bf;
 }
 
 .job.failed {
   border-color: #ffc5be;
+}
+
+.job.retried {
+  border-color: #cbd5e1;
 }
 
 .error-text {

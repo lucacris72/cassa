@@ -6,6 +6,10 @@
       <h1>Ordini</h1>
       <form method="get" action="/orders" class="inline-form">
         <input type="date" name="date" value="{{ selected_date }}">
+        <select name="print_status">
+          <option value="all" {% if selected_print_status == "all" %}selected{% endif %}>Tutte le stampe</option>
+          <option value="failed" {% if selected_print_status == "failed" %}selected{% endif %}>Solo stampe fallite</option>
+        </select>
         <button class="button" type="submit">Filtra</button>
       </form>
     </div>
@@ -29,9 +33,13 @@
 
     <div class="order-list">
       {% for order in orders %}
+        {% set failed_count = order.print_jobs|selectattr("status", "equalto", "failed")|list|length %}
         <a class="order-row" href="/orders/{{ order.id }}">
           <strong>T{{ order.register_session }} · {% if order.order_number %}N. {{ "%03d"|format(order.order_number) }}{% else %}S/N{% endif %}</strong>
           <span>{{ order.status }}</span>
+          {% if failed_count %}
+            <span class="status-badge failed">Stampa KO · {{ failed_count }}</span>
+          {% endif %}
           <span>{{ order.total_cents|money }}</span>
           <span>{{ order.created_at.strftime("%H:%M") }}</span>
         </a>

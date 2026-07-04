@@ -10,7 +10,7 @@ from ..database import get_db
 from ..models import Category, Order, PrintJob, Product, User
 from ..services import orders as order_service
 from ..services.numbering import business_date_for
-from ..services.printing import print_order
+from ..services.printing import print_order, retry_failed_print_jobs
 from ..templating import render
 
 
@@ -21,6 +21,7 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 def orders_page(
     request: Request,
     date: str | None = Query(None),
+    print_status: str = Query("all"),
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin", "cashier")),
 ):
@@ -29,8 +30,12 @@ def orders_page(
         select(Order)
         .where(Order.business_date == selected_date)
         .order_by(Order.created_at.desc())
-        .options(selectinload(Order.items))
+        .options(selectinload(Order.items), selectinload(Order.print_jobs))
     ).all()
+    if print_status == "failed":
+        orders = [order for order in orders if any(job.status == "failed" for job in order.print_jobs)]
+    elif print_status != "all":
+        print_status = "all"
     pending_orders = db.scalars(
         select(Order)
         .where(Order.status == "pending_confirmation")
@@ -46,6 +51,7 @@ def orders_page(
             "orders": orders,
             "pending_orders": pending_orders,
             "selected_date": selected_date,
+            "selected_print_status": print_status,
         },
     )
 
@@ -92,6 +98,7 @@ def order_detail(
             "user": user,
             "flashes": pop_flashes(request),
             "order": order,
+            "failed_print_jobs": [job for job in order.print_jobs if job.status == "failed"],
             "categories": categories,
             "products": products,
         },
@@ -163,6 +170,23 @@ def reprint_production(
     for warning in result.warnings:
         add_flash(request, warning, "warning")
     add_flash(request, "Ristampa produzione richiesta", "success")
+    return RedirectResponse(f"/orders/{order_id}", status_code=303)
+
+
+@router.post("/{order_id}/reprint/failed")
+def reprint_failed(
+    order_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user("admin", "cashier")),
+):
+    result = retry_failed_print_jobs(db, order_id)
+    for warning in result.warnings:
+        add_flash(request, warning, "warning")
+    if result.jobs:
+        printed = sum(1 for job in result.jobs if job.status == "printed")
+        failed = sum(1 for job in result.jobs if job.status == "failed")
+        add_flash(request, f"Ristampe fallite ritentate: {printed} ok, {failed} fallite", "success" if failed == 0 else "warning")
     return RedirectResponse(f"/orders/{order_id}", status_code=303)
 
 

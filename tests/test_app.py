@@ -450,6 +450,49 @@ def test_network_printer_retry_can_recover(db_session, monkeypatch):
     assert len(attempts) == 2
 
 
+def test_failed_print_jobs_can_be_filtered_and_retried(admin_client, db_session, monkeypatch):
+    customer_printer = db_session.scalar(select(Printer).where(Printer.is_customer_printer.is_(True)))
+    customer_printer.type = "network_escpos"
+    customer_printer.ip = "192.0.2.10"
+    db_session.commit()
+
+    def fail_network(job, printer, order):
+        raise printing.NetworkPrintError("temporary timeout")
+
+    monkeypatch.setattr(printing, "NETWORK_RETRY_DELAYS_SECONDS", (0, 0))
+    monkeypatch.setattr(printing, "_send_network_escpos", fail_network)
+    product = db_session.scalar(select(Product).where(Product.name == "Panino salamella"))
+    order = create_confirmed_order(db_session, parse_cart_json(json.dumps([{"product_id": product.id, "quantity": 1}])), source="test")
+    printing.print_order(db_session, order.id, include_customer=True, include_production=False)
+
+    detail = admin_client.get(f"/orders/{order.id}")
+    assert detail.status_code == 200
+    assert "Riprova stampe fallite" in detail.text
+    assert "Stampe fallite" in detail.text
+
+    failed_list = admin_client.get(f"/orders?date={order.business_date}&print_status=failed")
+    assert failed_list.status_code == 200
+    assert "Stampa KO" in failed_list.text
+    assert "N. 001" in failed_list.text
+
+    def recover_network(job, printer, order):
+        return None
+
+    monkeypatch.setattr(printing, "_send_network_escpos", recover_network)
+    retry = admin_client.post(f"/orders/{order.id}/reprint/failed", follow_redirects=False)
+    assert retry.status_code == 303
+
+    db_session.expire_all()
+    jobs = db_session.scalars(select(PrintJob).where(PrintJob.order_id == order.id)).all()
+    assert {job.status for job in jobs} == {"retried", "printed"}
+
+    updated_detail = admin_client.get(f"/orders/{order.id}")
+    assert updated_detail.status_code == 200
+    assert "Riprova stampe fallite" not in updated_detail.text
+    updated_failed_list = admin_client.get(f"/orders?date={order.business_date}&print_status=failed")
+    assert "N. 001" not in updated_failed_list.text
+
+
 def test_usb_printer_job_dispatch_is_recorded(db_session, monkeypatch):
     customer_printer = db_session.scalar(select(Printer).where(Printer.is_customer_printer.is_(True)))
     customer_printer.type = "usb_escpos"
