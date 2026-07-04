@@ -193,6 +193,10 @@ def run_sqlite_migrations() -> None:
             category_columns = _table_columns(conn, "categories")
             if "show_in_cashier" not in category_columns:
                 conn.execute(text("ALTER TABLE categories ADD COLUMN show_in_cashier BOOLEAN NOT NULL DEFAULT 1"))
+        if _table_exists(conn, "printers"):
+            printer_columns = _table_columns(conn, "printers")
+            if "partial_cut" not in printer_columns:
+                conn.execute(text("ALTER TABLE printers ADD COLUMN partial_cut BOOLEAN NOT NULL DEFAULT 0"))
         if _table_exists(conn, "users"):
             user_columns = _table_columns(conn, "users")
             if "customer_printer_id" not in user_columns:

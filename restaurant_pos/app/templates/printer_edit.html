@@ -16,6 +16,7 @@
     <label>Porta / endpoint <input name="port" type="number" value="{{ printer.port }}"></label>
     <label class="checkbox"><input type="checkbox" name="enabled" value="true" {% if printer.enabled %}checked{% endif %}> Abilitata</label>
     <label class="checkbox"><input type="checkbox" name="is_customer_printer" value="true" {% if printer.is_customer_printer %}checked{% endif %}> Cliente</label>
+    <label class="checkbox"><input type="checkbox" name="partial_cut" value="true" {% if printer.partial_cut %}checked{% endif %}> Taglio parziale</label>
     <datalist id="usb-printers">
       {% for device in usb_devices %}
         <option value="{{ device.ref }}">{{ device.label }}</option>

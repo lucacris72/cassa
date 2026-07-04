@@ -176,6 +176,11 @@ def _escpos_reset_text() -> bytes:
     return b"\x1ba\x00\x1bE\x00\x1d!\x00"
 
 
+def _escpos_finish(printer: Printer) -> bytes:
+    cut_mode = b"\x01" if printer.partial_cut else b"\x00"
+    return b"\n\n\n\x1dV" + cut_mode
+
+
 def _is_separator_line(text: str) -> bool:
     return bool(text) and len(set(text)) == 1 and text[0] in {"=", "-", "*"}
 
@@ -187,7 +192,7 @@ def _is_item_title_line(text: str) -> bool:
     return quantity.strip().isdigit()
 
 
-def _build_customer_escpos(job: PrintJob, order: Order) -> bytes:
+def _build_customer_escpos(job: PrintJob, order: Order, printer: Printer) -> bytes:
     label = _order_label(order)
     total = format_money(order.total_cents)
     parts = [b"\x1b@"]
@@ -216,7 +221,7 @@ def _build_customer_escpos(job: PrintJob, order: Order) -> bytes:
             parts.append(_escpos_text(line, bold=True))
         else:
             parts.append(_escpos_text(line))
-    parts.extend([_escpos_reset_text(), b"\n\n\n\x1dV\x00"])
+    parts.extend([_escpos_reset_text(), _escpos_finish(printer)])
     return b"".join(parts)
 
 
@@ -243,21 +248,21 @@ def _build_production_escpos(job: PrintJob, order: Order, printer: Printer) -> b
             parts.append(_escpos_text(stripped, bold=True))
         else:
             parts.append(_escpos_text(line, bold=stripped.isupper()))
-    parts.extend([_escpos_reset_text(), b"\n\n\n\x1dV\x00"])
+    parts.extend([_escpos_reset_text(), _escpos_finish(printer)])
     return b"".join(parts)
 
 
-def _build_plain_escpos(job: PrintJob) -> bytes:
+def _build_plain_escpos(job: PrintJob, printer: Printer) -> bytes:
     payload = job.payload_text.encode("cp858", errors="replace")
-    return b"\x1b@" + payload + b"\n\n\n\x1dV\x00"
+    return b"\x1b@" + payload + _escpos_finish(printer)
 
 
 def _build_escpos_payload(job: PrintJob, order: Order, printer: Printer) -> bytes:
     if job.job_type == "customer":
-        return _build_customer_escpos(job, order)
+        return _build_customer_escpos(job, order, printer)
     if job.job_type == "production":
         return _build_production_escpos(job, order, printer)
-    return _build_plain_escpos(job)
+    return _build_plain_escpos(job, printer)
 
 
 def _send_network_escpos(job: PrintJob, printer: Printer, order: Order) -> None:

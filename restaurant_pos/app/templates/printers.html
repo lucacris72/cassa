@@ -17,6 +17,7 @@
       <label>Porta / endpoint <input name="port" type="number" value="9100"></label>
       <label class="checkbox"><input type="checkbox" name="enabled" value="true" checked> Abilitata</label>
       <label class="checkbox"><input type="checkbox" name="is_customer_printer" value="true"> Cliente</label>
+      <label class="checkbox"><input type="checkbox" name="partial_cut" value="true"> Taglio parziale</label>
       <button class="button primary" type="submit">Salva</button>
     </form>
 
@@ -24,7 +25,7 @@
       <h1>Stampanti</h1>
       <table>
         <thead>
-          <tr><th>Nome</th><th>Tipo</th><th>Indirizzo</th><th>Ruolo</th><th>Stato</th><th></th></tr>
+          <tr><th>Nome</th><th>Tipo</th><th>Indirizzo</th><th>Ruolo</th><th>Taglio</th><th>Stato</th><th></th></tr>
         </thead>
         <tbody>
           {% for printer in printers %}
@@ -33,6 +34,7 @@
               <td>{{ printer.type }}</td>
               <td>{{ printer_address(printer) }}</td>
               <td>{{ "Cliente" if printer.is_customer_printer else "Produzione" }}</td>
+              <td>{{ "Parziale" if printer.partial_cut else "Completo" }}</td>
               <td>{{ "Abilitata" if printer.enabled else "Disabilitata" }}</td>
               <td class="actions">
                 <a class="button small" href="/printers/{{ printer.id }}/edit">Modifica</a>
@@ -46,7 +48,7 @@
             </tr>
           {% else %}
             <tr>
-              <td colspan="6">Nessuna stampante configurata.</td>
+              <td colspan="7">Nessuna stampante configurata.</td>
             </tr>
           {% endfor %}
         </tbody>

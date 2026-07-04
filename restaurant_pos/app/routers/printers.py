@@ -69,6 +69,7 @@ def create_printer(
     port: int = Form(9100),
     enabled: bool = Form(False),
     is_customer_printer: bool = Form(False),
+    partial_cut: bool = Form(False),
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin")),
 ):
@@ -80,6 +81,7 @@ def create_printer(
             port=_normalize_port(type, port),
             enabled=enabled,
             is_customer_printer=is_customer_printer,
+            partial_cut=partial_cut,
         )
     )
     db.commit()
@@ -121,6 +123,7 @@ def edit_printer(
     port: int = Form(9100),
     enabled: bool = Form(False),
     is_customer_printer: bool = Form(False),
+    partial_cut: bool = Form(False),
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin")),
 ):
@@ -134,6 +137,7 @@ def edit_printer(
     printer.port = _normalize_port(type, port)
     printer.enabled = enabled
     printer.is_customer_printer = is_customer_printer
+    printer.partial_cut = partial_cut
     db.commit()
     add_flash(request, "Stampante aggiornata", "success")
     return RedirectResponse("/printers", status_code=303)

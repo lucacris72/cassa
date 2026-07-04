@@ -44,12 +44,16 @@ def test_main_pages_render(admin_client):
 def test_admin_crud_pages(admin_client, db_session):
     printer_response = admin_client.post(
         "/printers",
-        data={"name": "Expo", "type": "fake", "port": "9100", "enabled": "true"},
+        data={"name": "Expo", "type": "fake", "port": "9100", "enabled": "true", "partial_cut": "true"},
         follow_redirects=False,
     )
     assert printer_response.status_code == 303
     printer = db_session.scalar(select(Printer).where(Printer.name == "Expo"))
     assert printer is not None
+    assert printer.partial_cut is True
+    printers_page = admin_client.get("/printers")
+    assert printers_page.status_code == 200
+    assert "Parziale" in printers_page.text
 
     category_response = admin_client.post(
         "/categories",
@@ -461,6 +465,9 @@ def test_escpos_payload_contains_the_same_text_as_preview(db_session):
     customer_decoded = customer_data.decode("cp858", errors="ignore")
 
     assert b"\x1d!\x11" in customer_data
+    assert customer_data.endswith(b"\x1dV\x00")
+    customer_printer.partial_cut = True
+    assert printing._build_escpos_payload(customer_job, order, customer_printer).endswith(b"\x1dV\x01")
     assert all(len(line) <= printing.CUSTOMER_TICKET_WIDTH for line in customer_text.splitlines())
     for line in customer_text.splitlines():
         if line.strip():
@@ -475,7 +482,10 @@ def test_escpos_payload_contains_the_same_text_as_preview(db_session):
         status="pending",
         payload_text=production_text,
     )
-    production_decoded = printing._build_escpos_payload(production_job, order, kitchen_printer).decode("cp858", errors="ignore")
+    kitchen_printer.partial_cut = True
+    production_data = printing._build_escpos_payload(production_job, order, kitchen_printer)
+    production_decoded = production_data.decode("cp858", errors="ignore")
+    assert production_data.endswith(b"\x1dV\x01")
 
     for line in production_text.splitlines():
         if line.strip():

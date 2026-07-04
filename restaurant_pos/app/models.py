@@ -18,6 +18,7 @@ class Printer(Base):
     port: Mapped[int] = mapped_column(Integer, nullable=False, default=9100)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_customer_printer: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    partial_cut: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     categories: Mapped[list[Category]] = relationship(back_populates="printer")
     print_jobs: Mapped[list[PrintJob]] = relationship(back_populates="printer")
