@@ -26,7 +26,7 @@ Impostare in `.env` almeno:
 
 ```bash
 APP_HOST=0.0.0.0
-APP_PORT=8000
+APP_PORT=18000
 DATABASE_URL=sqlite:////opt/cassa/data/app.db
 PRINT_OUTPUT_DIR=/opt/cassa/print_output
 SECRET_KEY=<valore-lungo-casuale>
@@ -66,9 +66,9 @@ sudo crontab -e
 sudo systemctl status cassa
 sudo journalctl -u cassa -f
 sudo systemctl restart cassa
-curl http://127.0.0.1:8000/healthz
+curl http://192.168.5.90:18000/healthz
 ```
 
 ## Note rete
 
-Per una rete dedicata alla cassa, lasciare stampanti e client con IP statici. L'app può restare su porta `8000` e venire pubblicata via Nginx Proxy Manager, oppure essere raggiunta direttamente da LAN su `http://192.168.5.90:8000`.
+Per una rete dedicata alla cassa, lasciare stampanti e client con IP statici. Su questa VM la porta `8000` e gia occupata da un container, quindi la cassa usa `http://192.168.5.90:18000`. In alternativa puo essere pubblicata via Nginx Proxy Manager verso upstream `192.168.5.90:18000`.
