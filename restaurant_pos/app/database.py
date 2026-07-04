@@ -189,6 +189,31 @@ def run_sqlite_migrations() -> None:
             closure_unique_indexes = _unique_index_columns(conn, "register_closures")
             if "register_session" not in closure_columns or ["business_date"] in closure_unique_indexes:
                 _rebuild_register_closures_table(conn)
+        if _table_exists(conn, "categories"):
+            category_columns = _table_columns(conn, "categories")
+            if "show_in_cashier" not in category_columns:
+                conn.execute(text("ALTER TABLE categories ADD COLUMN show_in_cashier BOOLEAN NOT NULL DEFAULT 1"))
+        if _table_exists(conn, "product_import_aliases") and _table_exists(conn, "reservation_items"):
+            conn.execute(
+                text(
+                    """
+                    INSERT OR IGNORE INTO product_import_aliases (
+                      source_name, product_id, source_price_cents, created_at, updated_at
+                    )
+                    SELECT DISTINCT
+                      ri.product_name,
+                      ri.product_id,
+                      ri.unit_price_cents,
+                      CURRENT_TIMESTAMP,
+                      CURRENT_TIMESTAMP
+                    FROM reservation_items ri
+                    JOIN products p ON p.id = ri.product_id
+                    WHERE ri.product_id IS NOT NULL
+                      AND ri.product_name IS NOT NULL
+                      AND TRIM(ri.product_name) != ''
+                    """
+                )
+            )
         conn.execute(text("PRAGMA foreign_keys=ON"))
 
 

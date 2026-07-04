@@ -83,22 +83,7 @@ def create_confirmed_order(
 ) -> Order:
     try:
         begin_immediate_if_sqlite(db)
-        business_date = business_date_for()
-        register_session = current_register_session(db, business_date)
-        order = Order(
-            order_number=next_order_number(db, business_date, register_session),
-            business_date=business_date,
-            register_session=register_session,
-            status="paid" if mark_paid else "confirmed",
-            total_cents=0,
-            source=source,
-            notes=notes,
-            paid_at=datetime.now(UTC) if mark_paid else None,
-        )
-        items, total_cents = _build_order_items(db, lines)
-        order.total_cents = total_cents
-        order.items = items
-        db.add(order)
+        order = stage_confirmed_order(db, lines, source=source, notes=notes, mark_paid=mark_paid)
         db.commit()
         db.refresh(order)
         return order
@@ -108,6 +93,34 @@ def create_confirmed_order(
     except Exception:
         db.rollback()
         raise
+
+
+def stage_confirmed_order(
+    db: Session,
+    lines: list[CartLine],
+    *,
+    source: str,
+    notes: str | None = None,
+    mark_paid: bool = False,
+) -> Order:
+    business_date = business_date_for()
+    register_session = current_register_session(db, business_date)
+    order = Order(
+        order_number=next_order_number(db, business_date, register_session),
+        business_date=business_date,
+        register_session=register_session,
+        status="paid" if mark_paid else "confirmed",
+        total_cents=0,
+        source=source,
+        notes=notes,
+        paid_at=datetime.now(UTC) if mark_paid else None,
+    )
+    items, total_cents = _build_order_items(db, lines)
+    order.total_cents = total_cents
+    order.items = items
+    db.add(order)
+    db.flush()
+    return order
 
 
 def create_pending_order(db: Session, lines: list[CartLine], *, source: str, notes: str | None = None) -> Order:

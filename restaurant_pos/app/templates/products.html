@@ -46,6 +46,33 @@
         <button form="bulk-products" class="button small danger" type="submit" name="action" value="delete" onclick="return confirm('Eliminare i prodotti selezionati?')">Elimina</button>
       </div>
 
+      {% if import_aliases %}
+        <details class="import-alias-panel">
+          <summary>Nomi import collegati</summary>
+          <div class="import-alias-list">
+            {% for alias in import_aliases %}
+              <form method="post" action="/products/import-aliases/{{ alias.id }}" class="import-alias-row">
+                <input type="hidden" name="return_to" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+                <div>
+                  <strong>{{ alias.source_name }}</strong>
+                  {% if alias.source_price_cents is not none %}
+                    <span>{{ alias.source_price_cents|money }}</span>
+                  {% endif %}
+                </div>
+                <select name="product_id" required>
+                  {% for product_option in all_products %}
+                    <option value="{{ product_option.id }}" {% if product_option.id == alias.product_id %}selected{% endif %}>
+                      {{ product_option.category.name }} · {{ product_option.name }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button class="button small" type="submit">Associa</button>
+              </form>
+            {% endfor %}
+          </div>
+        </details>
+      {% endif %}
+
       {% for group in grouped_products %}
         {% set bulk_group_id = "bulk-group-" ~ loop.index %}
         <section class="product-group">
@@ -95,6 +122,14 @@
                     <input form="product-edit-{{ product.id }}" name="description" value="{{ product.description or '' }}">
                   </label>
                 </div>
+
+                {% if product.import_aliases %}
+                  <div class="product-aliases">
+                    {% for alias in product.import_aliases %}
+                      <span title="{{ alias.source_name }}">{{ alias.source_name }}</span>
+                    {% endfor %}
+                  </div>
+                {% endif %}
 
                 <div class="product-row-actions">
                   <form method="post" action="/products/{{ product.id }}/toggle-active">

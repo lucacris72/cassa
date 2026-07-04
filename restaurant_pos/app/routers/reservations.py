@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -13,6 +15,12 @@ from ..templating import render
 
 
 router = APIRouter(prefix="/reservations", tags=["reservations"])
+
+
+def _safe_reservations_redirect(return_to: str | None) -> str:
+    if return_to and return_to.startswith("/reservations"):
+        return return_to
+    return "/reservations"
 
 
 @router.get("", response_class=HTMLResponse)
@@ -62,6 +70,36 @@ def import_reservations(
     return RedirectResponse("/reservations", status_code=303)
 
 
+@router.post("/bulk")
+def bulk_reservations(
+    request: Request,
+    action: str = Form(...),
+    reservation_ids: Annotated[list[int] | None, Form()] = None,
+    q: str = Form(""),
+    status: str = Form("open"),
+    return_to: str = Form("/reservations"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user("admin", "cashier")),
+):
+    try:
+        if action == "delete_selected":
+            selected_ids = reservation_ids or []
+            if not selected_ids:
+                add_flash(request, "Seleziona almeno una prenotazione", "warning")
+                return RedirectResponse(_safe_reservations_redirect(return_to), status_code=303)
+            deleted_count = reservation_service.delete_reservations(db, selected_ids)
+            add_flash(request, f"Prenotazioni eliminate: {deleted_count}", "success")
+        elif action == "delete_filtered":
+            deleted_count = reservation_service.delete_reservations_by_filter(db, query=q, status=status)
+            add_flash(request, f"Prenotazioni eliminate: {deleted_count}", "success")
+        else:
+            add_flash(request, "Azione non valida", "error")
+    except Exception as exc:
+        db.rollback()
+        add_flash(request, f"Azione di gruppo fallita: {exc}", "error")
+    return RedirectResponse(_safe_reservations_redirect(return_to), status_code=303)
+
+
 @router.post("/{reservation_id}/create-order")
 def create_order_from_reservation(
     reservation_id: int,
@@ -70,12 +108,15 @@ def create_order_from_reservation(
     user: User = Depends(require_user("admin", "cashier")),
 ):
     try:
-        order = reservation_service.create_order_from_reservation(db, reservation_id)
+        reservation = reservation_service.load_reservation_for_checkout(db, reservation_id)
+        if reservation.status == "converted" and reservation.order_id is not None:
+            add_flash(request, "Prenotazione gia convertita in comanda", "warning")
+            return RedirectResponse(f"/orders/{reservation.order_id}", status_code=303)
     except OrderError as exc:
         add_flash(request, str(exc), "error")
         return RedirectResponse("/reservations", status_code=303)
     except Exception as exc:
-        add_flash(request, f"Comanda non creata: {exc}", "error")
+        add_flash(request, f"Prenotazione non aperta: {exc}", "error")
         return RedirectResponse("/reservations", status_code=303)
-    add_flash(request, "Comanda creata in revisione", "success")
-    return RedirectResponse(f"/orders/{order.id}", status_code=303)
+    add_flash(request, "Prenotazione aperta in cassa", "success")
+    return RedirectResponse(f"/?reservation_id={reservation.id}", status_code=303)

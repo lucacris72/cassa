@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..auth import add_flash, pop_flashes, require_user
 from ..database import get_db
-from ..models import Category, OrderItem, Product, User
+from ..models import Category, OrderItem, Product, ProductImportAlias, User
 from ..templating import render
 from ..utils import parse_price_to_cents
 
@@ -39,6 +39,15 @@ def _group_products(products: list[Product]) -> list[dict[str, object]]:
     return list(groups.values())
 
 
+def _all_products_for_select(db: Session):
+    return db.scalars(
+        select(Product)
+        .join(Product.category)
+        .options(selectinload(Product.category))
+        .order_by(Category.sort_order, Category.name, Product.sort_order, Product.name)
+    ).all()
+
+
 @router.get("", response_class=HTMLResponse)
 def products_page(
     request: Request,
@@ -47,7 +56,11 @@ def products_page(
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin")),
 ):
-    query = select(Product).join(Product.category).options(selectinload(Product.category))
+    query = (
+        select(Product)
+        .join(Product.category)
+        .options(selectinload(Product.category), selectinload(Product.import_aliases))
+    )
     if category_id:
         query = query.where(Product.category_id == category_id)
     if show == "active":
@@ -56,6 +69,11 @@ def products_page(
         query = query.where(Product.active.is_(False))
     products = db.scalars(
         query.order_by(Category.sort_order, Category.name, Product.sort_order, Product.name)
+    ).all()
+    import_aliases = db.scalars(
+        select(ProductImportAlias)
+        .options(selectinload(ProductImportAlias.product).selectinload(Product.category))
+        .order_by(ProductImportAlias.source_name)
     ).all()
     return render(
         request,
@@ -66,6 +84,8 @@ def products_page(
             "products": products,
             "grouped_products": _group_products(products),
             "categories": _categories(db),
+            "all_products": _all_products_for_select(db),
+            "import_aliases": import_aliases,
             "selected_category_id": category_id,
             "selected_show": show,
         },
@@ -239,6 +259,26 @@ def bulk_products(
     except Exception as exc:
         db.rollback()
         add_flash(request, f"Azione di gruppo fallita: {exc}", "error")
+    return RedirectResponse(_safe_products_redirect(return_to), status_code=303)
+
+
+@router.post("/import-aliases/{alias_id}")
+def update_import_alias(
+    alias_id: int,
+    request: Request,
+    product_id: int = Form(...),
+    return_to: str = Form("/products"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user("admin")),
+):
+    alias = db.get(ProductImportAlias, alias_id)
+    product = db.get(Product, product_id)
+    if alias is None or product is None:
+        add_flash(request, "Associazione import non trovata", "error")
+        return RedirectResponse(_safe_products_redirect(return_to), status_code=303)
+    alias.product_id = product.id
+    db.commit()
+    add_flash(request, "Associazione import aggiornata", "success")
     return RedirectResponse(_safe_products_redirect(return_to), status_code=303)
 
 

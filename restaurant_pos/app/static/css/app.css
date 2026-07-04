@@ -373,6 +373,26 @@ button:hover {
   padding-top: 16px;
 }
 
+.reservation-checkout {
+  background: #f7f9fb;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 10px;
+}
+
+.reservation-checkout strong {
+  font-size: 16px;
+}
+
+.reservation-checkout span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
 .summary-grid {
   display: grid;
   gap: 10px;
@@ -442,6 +462,43 @@ button:hover {
   margin-right: auto;
 }
 
+.import-alias-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+}
+
+.import-alias-panel summary {
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.import-alias-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.import-alias-row {
+  align-items: end;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.2fr) auto;
+  padding-top: 8px;
+}
+
+.import-alias-row strong,
+.import-alias-row span {
+  display: block;
+}
+
+.import-alias-row span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .product-edit-list {
   display: grid;
   gap: 10px;
@@ -490,6 +547,26 @@ button:hover {
 
 .product-meta-fields {
   grid-template-columns: minmax(160px, 0.9fr) 96px minmax(180px, 1.2fr);
+}
+
+.product-aliases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  grid-column: 2;
+}
+
+.product-aliases span {
+  background: #eef3f4;
+  border: 1px solid #d7e2e3;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 220px;
+  overflow: hidden;
+  padding: 4px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .product-name-field input {
@@ -722,6 +799,25 @@ th {
   font-size: 16px;
 }
 
+.reservation-table td.actions {
+  display: table-cell;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.reservation-table td.actions .button {
+  display: inline-flex;
+}
+
+.reservation-select {
+  width: 36px;
+}
+
+.reservation-select input {
+  min-height: 0;
+  width: auto;
+}
+
 .reservation-products summary {
   cursor: pointer;
   font-weight: 800;
@@ -807,6 +903,7 @@ pre {
 
   .product-main-fields,
   .product-meta-fields,
+  .product-aliases,
   .product-row-actions {
     grid-column: 2;
   }
@@ -823,6 +920,10 @@ pre {
 
   .product-description-field {
     grid-column: 1 / -1;
+  }
+
+  .import-alias-row {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -875,6 +976,10 @@ pre {
   .product-meta-fields {
     grid-column: auto;
     grid-template-columns: 1fr;
+  }
+
+  .product-aliases {
+    grid-column: auto;
   }
 
   .product-description-field,

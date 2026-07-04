@@ -30,6 +30,7 @@ class Category(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     printer_id: Mapped[int | None] = mapped_column(ForeignKey("printers.id"), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    show_in_cashier: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     printer: Mapped[Printer | None] = relationship(back_populates="categories")
@@ -48,6 +49,25 @@ class Product(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     category: Mapped[Category] = relationship(back_populates="products")
+    import_aliases: Mapped[list[ProductImportAlias]] = relationship(
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductImportAlias.source_name",
+    )
+
+
+class ProductImportAlias(Base):
+    __tablename__ = "product_import_aliases"
+    __table_args__ = (UniqueConstraint("source_name", name="uq_product_import_alias_source_name"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_name: Mapped[str] = mapped_column(String(220), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False)
+    source_price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+
+    product: Mapped[Product] = relationship(back_populates="import_aliases")
 
 
 class Order(Base):

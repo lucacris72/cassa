@@ -45,10 +45,18 @@ def create_category(
     name: str = Form(...),
     printer_id: int = Form(0),
     sort_order: int = Form(0),
+    show_in_cashier: bool = Form(True),
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin")),
 ):
-    db.add(Category(name=name.strip(), printer_id=printer_id or None, sort_order=sort_order))
+    db.add(
+        Category(
+            name=name.strip(),
+            printer_id=printer_id or None,
+            sort_order=sort_order,
+            show_in_cashier=show_in_cashier,
+        )
+    )
     db.commit()
     add_flash(request, "Categoria creata", "success")
     return RedirectResponse("/categories", status_code=303)
@@ -85,6 +93,7 @@ def edit_category(
     printer_id: int = Form(0),
     sort_order: int = Form(0),
     active: bool = Form(False),
+    show_in_cashier: bool = Form(False),
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin")),
 ):
@@ -96,6 +105,25 @@ def edit_category(
     category.printer_id = printer_id or None
     category.sort_order = sort_order
     category.active = active
+    category.show_in_cashier = show_in_cashier
     db.commit()
     add_flash(request, "Categoria aggiornata", "success")
+    return RedirectResponse("/categories", status_code=303)
+
+
+@router.post("/{category_id}/toggle-cashier-visibility")
+def toggle_cashier_visibility(
+    category_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user("admin")),
+):
+    category = db.get(Category, category_id)
+    if category is None:
+        add_flash(request, "Categoria non trovata", "error")
+        return RedirectResponse("/categories", status_code=303)
+    category.show_in_cashier = not category.show_in_cashier
+    db.commit()
+    state = "visibile in cassa" if category.show_in_cashier else "nascosta dalla cassa"
+    add_flash(request, f"{category.name}: {state}", "success")
     return RedirectResponse("/categories", status_code=303)

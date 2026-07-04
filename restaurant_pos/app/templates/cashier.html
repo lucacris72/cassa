@@ -30,7 +30,14 @@
     </div>
 
     <aside class="cart-panel">
-      <h1>Ordine</h1>
+      <h1>{% if checkout_reservation %}Prenotazione{% else %}Ordine{% endif %}</h1>
+      {% if checkout_reservation %}
+        <div class="reservation-checkout">
+          <strong>{{ checkout_reservation.last_name }} {{ checkout_reservation.first_name }}</strong>
+          <span>{{ checkout_reservation.email or "-" }}</span>
+          <span>{{ checkout_reservation.booking_type or "-" }} · {{ checkout_reservation.participant_count }} persone</span>
+        </div>
+      {% endif %}
       <div id="cart-items" class="cart-items"></div>
       <div class="cart-total">
         <span>Totale</span>
@@ -38,6 +45,9 @@
       </div>
       <form method="post" action="/orders" id="order-form" class="stack">
         <input type="hidden" name="cart_json" id="cart-json">
+        {% if checkout_reservation %}
+          <input type="hidden" name="reservation_id" value="{{ checkout_reservation.id }}">
+        {% endif %}
         <label>
           Note ordine
           <textarea name="notes" rows="2"></textarea>
@@ -51,5 +61,8 @@
       </form>
     </aside>
   </section>
-  <script src="{{ url_for('static', path='/js/cashier.js') }}"></script>
+  <script>
+    window.initialCart = {{ initial_cart|tojson }};
+  </script>
+  <script src="{{ url_for('static', path='/js/cashier.js') }}?v=reservation-checkout-2"></script>
 {% endblock %}

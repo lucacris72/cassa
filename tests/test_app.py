@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from restaurant_pos.app.models import Category, Order, OrderItem, Printer, PrintJob, Product, RegisterClosure, Reservation, User
+from restaurant_pos.app.models import Category, Order, OrderItem, Printer, PrintJob, Product, ProductImportAlias, RegisterClosure, Reservation, ReservationItem, User
 from restaurant_pos.app.services import printing
 from restaurant_pos.app.services.numbering import business_date_for
 from restaurant_pos.app.services.orders import create_confirmed_order, parse_cart_json
@@ -106,6 +106,34 @@ def test_admin_crud_pages(admin_client, db_session):
     assert toggle_response.headers["location"] == "/products?show=inactive"
     db_session.refresh(product)
     assert product.active is True
+
+
+def test_category_can_be_hidden_from_cashier_without_deactivation(admin_client, db_session):
+    category = db_session.scalar(select(Category).where(Category.name == "Cucina"))
+    assert category is not None
+
+    response = admin_client.post(f"/categories/{category.id}/toggle-cashier-visibility", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/categories"
+
+    db_session.expire_all()
+    category = db_session.get(Category, category.id)
+    assert category.active is True
+    assert category.show_in_cashier is False
+
+    categories_page = admin_client.get("/categories")
+    assert categories_page.status_code == 200
+    assert "Nascosta" in categories_page.text
+
+    cashier_page = admin_client.get("/")
+    assert cashier_page.status_code == 200
+    assert f'data-category-filter="{category.id}"' not in cashier_page.text
+    assert "Panino salamella" not in cashier_page.text
+
+    mobile_page = admin_client.get("/mobile")
+    assert mobile_page.status_code == 200
+    assert f'data-category-filter="{category.id}"' not in mobile_page.text
+    assert "Panino salamella" not in mobile_page.text
 
 
 def test_printer_delete_unassigns_references(admin_client, db_session):
@@ -416,7 +444,7 @@ def test_mobile_order_is_confirmed_printed_and_returns_to_mobile(cashier_client,
     assert db_session.scalars(select(PrintJob).where(PrintJob.order_id == order.id)).all()
 
 
-def test_reservation_import_and_create_pending_order(admin_client, db_session, tmp_path):
+def test_reservation_import_and_checkout_from_cashier(admin_client, db_session, tmp_path):
     import openpyxl
 
     path = tmp_path / "prenotazioni.xlsx"
@@ -459,22 +487,188 @@ def test_reservation_import_and_create_pending_order(admin_client, db_session, t
     assert reservation is not None
     assert reservation.total_cents == 1100
     assert len(reservation.items) == 2
+    panino_alias = db_session.scalar(select(ProductImportAlias).where(ProductImportAlias.source_name == "PANINO CON SALAMELLA"))
+    assert panino_alias is not None
+    panino_product = db_session.get(Product, panino_alias.product_id)
+    assert panino_product is not None
+
+    panino_product.name = "Panino salamella pren."
+    db_session.commit()
+    second_import = import_reservations_from_xlsx(db_session, str(path))
+    assert second_import.products_created == 0
+    db_session.expire_all()
+    reservation = db_session.scalar(select(Reservation).where(Reservation.last_name == "Rossi"))
+    assert any(item.product_name == "Panino salamella pren." for item in reservation.items)
 
     page = admin_client.get("/reservations?q=rossi")
     assert page.status_code == 200
     assert "Rossi Mario" in page.text
+    assert "Apri in cassa" in page.text
 
-    create_response = admin_client.post(f"/reservations/{reservation.id}/create-order", follow_redirects=False)
+    checkout_page = admin_client.get(f"/?reservation_id={reservation.id}")
+    assert checkout_page.status_code == 200
+    assert "Rossi Mario" in checkout_page.text
+    assert "window.initialCart" in checkout_page.text
+    assert "Panino salamella pren." in checkout_page.text
+    assert '<textarea name="notes" rows="2"></textarea>' in checkout_page.text
+
+    create_response = admin_client.post(
+        "/orders",
+        data={
+            "reservation_id": str(reservation.id),
+            "cart_json": json.dumps(
+                [
+                    {"product_id": reservation.items[0].product_id, "quantity": 2},
+                    {"product_id": reservation.items[1].product_id, "quantity": 1},
+                ]
+            ),
+            "notes": "prenotazione controllata in cassa",
+        },
+        follow_redirects=False,
+    )
     assert create_response.status_code == 303
+    assert create_response.headers["location"] == "/"
+
     order = db_session.scalar(select(Order).order_by(Order.id.desc()))
-    assert create_response.headers["location"] == f"/orders/{order.id}"
-    assert order.status == "pending_confirmation"
+    assert order.status == "confirmed"
     assert order.source == "reservation"
-    assert order.order_number is None
+    assert order.order_number == 1
     assert order.total_cents == 1100
+    assert order.notes == "prenotazione controllata in cassa"
+    assert db_session.scalars(select(PrintJob).where(PrintJob.order_id == order.id)).all()
     db_session.refresh(reservation)
     assert reservation.status == "converted"
     assert reservation.order_id == order.id
+
+
+def test_import_alias_can_be_reassigned_to_existing_cashier_product(admin_client, db_session, tmp_path):
+    import openpyxl
+
+    category = db_session.scalar(select(Category).where(Category.name == "Cucina"))
+    short_product = Product(name="Menu breve", price_cents=900, category_id=category.id, active=True)
+    db_session.add(short_product)
+    db_session.commit()
+    db_session.refresh(short_product)
+
+    path = tmp_path / "prenotazioni.xlsx"
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(
+        [
+            "Informazioni cronologiche",
+            "Indirizzo email",
+            "Cognome ",
+            "Nome",
+            "Numero di partecipanti",
+            "Tipologia di prenotazione",
+            "Liberatoria allergeni",
+            "€9,00 MENU COMPLETO CON DESCRIZIONE MOLTO LUNGA",
+        ]
+    )
+    sheet.append(["2026-07-01 11:00:00", "verdi@example.com", "Verdi", "Luigi", 1, "Ospite", "Ok", 1])
+    workbook.save(path)
+
+    import_reservations_from_xlsx(db_session, str(path))
+    alias = db_session.scalar(
+        select(ProductImportAlias).where(ProductImportAlias.source_name == "MENU COMPLETO CON DESCRIZIONE MOLTO LUNGA")
+    )
+    assert alias is not None
+
+    products_page = admin_client.get("/products")
+    assert products_page.status_code == 200
+    assert "Nomi import collegati" in products_page.text
+    assert "MENU COMPLETO CON DESCRIZIONE MOLTO LUNGA" in products_page.text
+
+    response = admin_client.post(
+        f"/products/import-aliases/{alias.id}",
+        data={"product_id": str(short_product.id), "return_to": "/products"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    db_session.expire_all()
+    alias = db_session.get(ProductImportAlias, alias.id)
+    assert alias.product_id == short_product.id
+
+    import_reservations_from_xlsx(db_session, str(path))
+    reservation = db_session.scalar(select(Reservation).where(Reservation.last_name == "Verdi"))
+    assert reservation.items[0].product_id == short_product.id
+    assert reservation.items[0].product_name == "Menu breve"
+
+
+def test_reservation_bulk_delete_actions(admin_client, db_session):
+    product = db_session.scalar(select(Product).where(Product.name == "Acqua"))
+    reservation_a = Reservation(
+        source_key="bulk-a",
+        source_file="test.xlsx",
+        source_row=2,
+        first_name="Anna",
+        last_name="Aperti",
+        participant_count=1,
+        status="imported",
+        total_cents=product.price_cents,
+        items=[
+            ReservationItem(
+                product_id=product.id,
+                product_name=product.name,
+                quantity=1,
+                unit_price_cents=product.price_cents,
+                line_total_cents=product.price_cents,
+            )
+        ],
+    )
+    reservation_b = Reservation(
+        source_key="bulk-b",
+        source_file="test.xlsx",
+        source_row=3,
+        first_name="Bruno",
+        last_name="Aperti",
+        participant_count=1,
+        status="imported",
+        total_cents=product.price_cents,
+        items=[
+            ReservationItem(
+                product_id=product.id,
+                product_name=product.name,
+                quantity=1,
+                unit_price_cents=product.price_cents,
+                line_total_cents=product.price_cents,
+            )
+        ],
+    )
+    db_session.add_all([reservation_a, reservation_b])
+    db_session.commit()
+    db_session.refresh(reservation_a)
+    db_session.refresh(reservation_b)
+    reservation_a_id = reservation_a.id
+    reservation_b_id = reservation_b.id
+
+    selected = admin_client.post(
+        "/reservations/bulk",
+        data={
+            "action": "delete_selected",
+            "reservation_ids": [str(reservation_a_id)],
+            "return_to": "/reservations",
+        },
+        follow_redirects=False,
+    )
+    assert selected.status_code == 303
+    db_session.expire_all()
+    assert db_session.get(Reservation, reservation_a_id) is None
+    assert db_session.get(Reservation, reservation_b_id) is not None
+
+    filtered = admin_client.post(
+        "/reservations/bulk",
+        data={
+            "action": "delete_filtered",
+            "status": "imported",
+            "q": "aperti",
+            "return_to": "/reservations?status=imported&q=aperti",
+        },
+        follow_redirects=False,
+    )
+    assert filtered.status_code == 303
+    db_session.expire_all()
+    assert db_session.get(Reservation, reservation_b_id) is None
 
 
 def test_pending_order_can_be_edited_before_confirm(admin_client, db_session):

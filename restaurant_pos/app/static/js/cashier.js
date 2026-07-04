@@ -1,4 +1,12 @@
-const cart = [];
+const cart = Array.isArray(window.initialCart)
+  ? window.initialCart.map((item) => ({
+      product_id: Number(item.product_id),
+      name: String(item.name || ""),
+      price_cents: Number(item.price_cents),
+      quantity: Number(item.quantity),
+      notes: String(item.notes || ""),
+    }))
+  : [];
 
 function money(cents) {
   return `${(cents / 100).toFixed(2)} EUR`;

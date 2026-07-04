@@ -24,15 +24,20 @@ def mobile_page(
 ):
     categories = db.scalars(
         select(Category)
-        .where(Category.active.is_(True))
+        .where(Category.active.is_(True), Category.show_in_cashier.is_(True))
         .options(selectinload(Category.products))
         .order_by(Category.sort_order, Category.name)
     ).all()
     products = db.scalars(
         select(Product)
-        .where(Product.active.is_(True))
+        .join(Product.category)
+        .where(
+            Product.active.is_(True),
+            Category.active.is_(True),
+            Category.show_in_cashier.is_(True),
+        )
         .options(selectinload(Product.category))
-        .order_by(Product.sort_order, Product.name)
+        .order_by(Category.sort_order, Category.name, Product.sort_order, Product.name)
     ).all()
     return render(
         request,

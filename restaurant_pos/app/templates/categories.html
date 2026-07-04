@@ -15,6 +15,11 @@
         </select>
       </label>
       <label>Ordine <input name="sort_order" type="number" value="0"></label>
+      <input type="hidden" name="show_in_cashier" value="false">
+      <label class="checkbox">
+        <input type="checkbox" name="show_in_cashier" value="true" checked>
+        Visibile in cassa
+      </label>
       <button class="button primary" type="submit">Salva</button>
     </form>
 
@@ -22,7 +27,7 @@
       <h1>Categorie</h1>
       <table>
         <thead>
-          <tr><th>Nome</th><th>Stampante</th><th>Stato</th><th></th></tr>
+          <tr><th>Nome</th><th>Stampante</th><th>Stato</th><th>Cassa</th><th></th></tr>
         </thead>
         <tbody>
           {% for category in categories %}
@@ -30,6 +35,13 @@
               <td>{{ category.name }}</td>
               <td>{{ category.printer.name if category.printer else "Nessuna" }}</td>
               <td>{{ "Attiva" if category.active else "Disattiva" }}</td>
+              <td>
+                <form method="post" action="/categories/{{ category.id }}/toggle-cashier-visibility">
+                  <button class="status-toggle {{ 'on' if category.show_in_cashier else 'off' }}" type="submit">
+                    {{ "Visibile" if category.show_in_cashier else "Nascosta" }}
+                  </button>
+                </form>
+              </td>
               <td><a class="button small" href="/categories/{{ category.id }}/edit">Modifica</a></td>
             </tr>
           {% endfor %}

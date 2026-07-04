@@ -3,17 +3,19 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from ..config import resolve_project_path
-from ..models import Category, Order, Printer, Product, Reservation, ReservationItem
+from ..models import Category, Order, Printer, Product, ProductImportAlias, Reservation, ReservationItem
 from ..utils import parse_price_to_cents
-from .orders import CartLine, OrderError, create_pending_order
+from .numbering import begin_immediate_if_sqlite
+from .orders import CartLine, OrderError, OrderNumberConflict, stage_confirmed_order
 
 
 class ReservationImportError(ValueError):
@@ -113,30 +115,51 @@ def _reservation_category(db: Session) -> Category:
 
 
 def _product_for_column(db: Session, column: ProductColumn, category: Category) -> tuple[Product, bool, bool]:
-    product = db.scalar(select(Product).where(Product.name == column.name))
+    alias = db.scalar(
+        select(ProductImportAlias)
+        .where(ProductImportAlias.source_name == column.name)
+        .options(selectinload(ProductImportAlias.product))
+    )
+    product = alias.product if alias is not None else None
     created = False
     updated = False
     if product is None:
-        product = Product(
-            name=column.name,
-            price_cents=column.price_cents,
-            category_id=category.id,
-            active=True,
-            sort_order=category.sort_order,
-        )
-        db.add(product)
-        db.flush()
-        created = True
+        product = db.scalar(select(Product).where(Product.name == column.name))
+        if product is None:
+            product = Product(
+                name=column.name,
+                price_cents=column.price_cents,
+                category_id=category.id,
+                active=True,
+                sort_order=category.sort_order,
+            )
+            db.add(product)
+            db.flush()
+            created = True
     else:
         if product.price_cents != column.price_cents:
             product.price_cents = column.price_cents
             updated = True
-        if product.category_id != category.id:
-            product.category_id = category.id
-            updated = True
         if not product.active:
             product.active = True
             updated = True
+    if product.price_cents != column.price_cents:
+        product.price_cents = column.price_cents
+        updated = True
+    if not product.active:
+        product.active = True
+        updated = True
+    if alias is None:
+        db.add(
+            ProductImportAlias(
+                source_name=column.name,
+                product_id=product.id,
+                source_price_cents=column.price_cents,
+            )
+        )
+    else:
+        alias.source_price_cents = column.price_cents
+        alias.updated_at = datetime.now(UTC)
     return product, created, updated
 
 
@@ -274,6 +297,88 @@ def search_reservations(db: Session, query: str = "", status: str = "open") -> l
     return db.scalars(statement.order_by(Reservation.last_name, Reservation.first_name, Reservation.id)).all()
 
 
+def _reservation_with_items(db: Session, reservation_id: int) -> Reservation | None:
+    return db.scalar(
+        select(Reservation)
+        .where(Reservation.id == reservation_id)
+        .options(
+            selectinload(Reservation.items).selectinload(ReservationItem.product),
+            selectinload(Reservation.order),
+        )
+    )
+
+
+def load_reservation_for_checkout(db: Session, reservation_id: int) -> Reservation:
+    reservation = _reservation_with_items(db, reservation_id)
+    if reservation is None:
+        raise OrderError("Prenotazione non trovata")
+    return reservation
+
+
+def reservation_order_notes(reservation: Reservation) -> str:
+    return (
+        f"Prenotazione {reservation.last_name} {reservation.first_name}"
+        f" - {reservation.email or 'email non indicata'}"
+        f" - {reservation.booking_type or 'tipologia non indicata'}"
+        f" - partecipanti {reservation.participant_count}"
+    )
+
+
+def reservation_cart_items(reservation: Reservation) -> list[dict[str, object]]:
+    cart_items: list[dict[str, object]] = []
+    for item in reservation.items:
+        if item.product_id is None or item.quantity <= 0:
+            continue
+        product = item.product
+        cart_items.append(
+            {
+                "product_id": item.product_id,
+                "name": product.name if product is not None else item.product_name,
+                "price_cents": product.price_cents if product is not None else item.unit_price_cents,
+                "quantity": item.quantity,
+                "notes": "",
+            }
+        )
+    if not cart_items:
+        raise OrderError("Prenotazione senza prodotti ordinabili")
+    return cart_items
+
+
+def create_confirmed_order_from_reservation(
+    db: Session,
+    reservation_id: int,
+    lines: list[CartLine],
+    *,
+    notes: str | None = None,
+    mark_paid: bool = False,
+) -> Order:
+    try:
+        begin_immediate_if_sqlite(db)
+        reservation = _reservation_with_items(db, reservation_id)
+        if reservation is None:
+            raise OrderError("Prenotazione non trovata")
+        if reservation.status == "converted" and reservation.order_id is not None:
+            raise OrderError("Prenotazione gia convertita in comanda")
+        order = stage_confirmed_order(
+            db,
+            lines,
+            source="reservation",
+            notes=notes,
+            mark_paid=mark_paid,
+        )
+        reservation.status = "converted"
+        reservation.order_id = order.id
+        db.commit()
+        db.refresh(order)
+        return order
+    except IntegrityError as exc:
+        db.rollback()
+        raise OrderNumberConflict("Numero ordine duplicato, riprovare") from exc
+    except Exception:
+        db.rollback()
+        raise
+
+
 def create_order_from_reservation(db: Session, reservation_id: int) -> Order:
     reservation = db.scalar(
         select(Reservation)
@@ -299,9 +404,28 @@ def create_order_from_reservation(db: Session, reservation_id: int) -> Order:
         f" - {reservation.booking_type or 'tipologia non indicata'}"
         f" - partecipanti {reservation.participant_count}"
     )
-    order = create_pending_order(db, lines, source="reservation", notes=notes)
-    reservation.status = "converted"
-    reservation.order_id = order.id
+    return create_confirmed_order_from_reservation(db, reservation_id, lines, notes=notes)
+
+
+def _delete_loaded_reservations(db: Session, reservations: list[Reservation]) -> int:
+    for reservation in reservations:
+        db.delete(reservation)
     db.commit()
-    db.refresh(order)
-    return order
+    return len(reservations)
+
+
+def delete_reservations(db: Session, reservation_ids: list[int]) -> int:
+    selected_ids = sorted(set(reservation_ids))
+    if not selected_ids:
+        return 0
+    reservations = db.scalars(
+        select(Reservation)
+        .where(Reservation.id.in_(selected_ids))
+        .options(selectinload(Reservation.items))
+    ).all()
+    return _delete_loaded_reservations(db, reservations)
+
+
+def delete_reservations_by_filter(db: Session, *, query: str = "", status: str = "open") -> int:
+    reservations = search_reservations(db, query=query, status=status)
+    return _delete_loaded_reservations(db, reservations)

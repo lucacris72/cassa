@@ -137,7 +137,11 @@ Il percorso predefinito e:
 prenotazioni.xlsx
 ```
 
-Premere `Importa`, cercare per nome/cognome/email e usare `Crea comanda`. La comanda viene creata in revisione: dal dettaglio ordine si controlla il contenuto e si preme `Conferma e stampa`.
+Premere `Importa`, cercare per nome/cognome/email e usare `Apri in cassa`. La cassa viene aperta con il carrello della prenotazione precaricato: da li si puo modificare la comanda e premere `Conferma e stampa`.
+
+I nomi prodotto letti dal file vengono salvati come `Nomi import collegati` nella pagina `Prodotti`. Il prodotto in cassa puo avere un nome piu breve o piu leggibile: gli import successivi continueranno ad associare il nome lungo del file allo stesso prodotto. Se serve, dalla pagina `Prodotti` si puo riassegnare un nome importato a un prodotto cassa diverso.
+
+Dalla pagina `Prenotazioni` si possono selezionare piu righe ed eliminare le selezionate, oppure eliminare tutti i risultati del filtro corrente. Gli ordini gia creati restano nello storico ordini.
 
 ## Backup
 

@@ -4,7 +4,7 @@
   <section class="page-header">
     <div>
       <h1>Prenotazioni</h1>
-      <p>Importa le risposte del modulo, cerca il nome e crea una comanda da revisionare.</p>
+      <p>Importa le risposte del modulo, cerca il nome e apri la prenotazione nella cassa.</p>
     </div>
     <form method="post" action="/reservations/import" class="inline-form">
       <input name="import_path" value="{{ default_import_path }}" aria-label="File prenotazioni">
@@ -27,9 +27,23 @@
       <strong>{{ reservations|length }} risultati</strong>
     </div>
 
+    <form id="bulk-reservations" method="post" action="/reservations/bulk"></form>
+    <input form="bulk-reservations" type="hidden" name="return_to" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+    <input form="bulk-reservations" type="hidden" name="q" value="{{ q }}">
+    <input form="bulk-reservations" type="hidden" name="status" value="{{ status }}">
+    <div class="bulk-actions bulk-actions-global">
+      <label class="checkbox">
+        <input type="checkbox" data-bulk-reservations-toggle>
+        Seleziona risultati
+      </label>
+      <button form="bulk-reservations" class="button small danger" type="submit" name="action" value="delete_selected" onclick="return confirm('Eliminare le prenotazioni selezionate? Gli ordini gia creati resteranno nello storico.')">Elimina selezionate</button>
+      <button form="bulk-reservations" class="button small danger" type="submit" name="action" value="delete_filtered" onclick="return confirm('Eliminare tutte le prenotazioni visualizzate dal filtro corrente? Gli ordini gia creati resteranno nello storico.')">Elimina risultati filtrati</button>
+    </div>
+
     <table class="reservation-table">
       <thead>
         <tr>
+          <th></th>
           <th>Nome</th>
           <th>Tipo</th>
           <th>Persone</th>
@@ -42,6 +56,9 @@
       <tbody>
         {% for reservation in reservations %}
           <tr>
+            <td class="reservation-select">
+              <input form="bulk-reservations" type="checkbox" name="reservation_ids" value="{{ reservation.id }}" data-bulk-reservation-checkbox>
+            </td>
             <td>
               <strong>{{ reservation.last_name }} {{ reservation.first_name }}</strong>
               <div class="muted">{{ reservation.email or "-" }}</div>
@@ -68,18 +85,17 @@
               {% if reservation.order_id %}
                 <a class="button small" href="/orders/{{ reservation.order_id }}">Apri comanda</a>
               {% else %}
-                <form method="post" action="/reservations/{{ reservation.id }}/create-order">
-                  <button class="button small primary" type="submit">Crea comanda</button>
-                </form>
+                <a class="button small primary" href="/?reservation_id={{ reservation.id }}">Apri in cassa</a>
               {% endif %}
             </td>
           </tr>
         {% else %}
           <tr>
-            <td colspan="7">Nessuna prenotazione trovata.</td>
+            <td colspan="8">Nessuna prenotazione trovata.</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
   </section>
+  <script src="{{ url_for('static', path='/js/reservations.js') }}"></script>
 {% endblock %}
