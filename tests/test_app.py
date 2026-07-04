@@ -262,8 +262,13 @@ def test_order_creation_numbering_snapshot_and_fake_output(cashier_client, db_se
     assert "COMANDA CLIENTE" in customer_ticket
     assert " 2 x PANINO SALAMELLA" in customer_ticket
     assert "2 x 6.00 EUR = 12.00 EUR" in customer_ticket
+    assert "*" * printing.CUSTOMER_TICKET_WIDTH in customer_ticket
     assert "TOTALE" in customer_ticket
     assert "12.00 EUR" in customer_ticket
+    assert all(len(line) <= printing.CUSTOMER_TICKET_WIDTH for line in customer_ticket.splitlines())
+    customer_ticket_lines = customer_ticket.split("\n")
+    assert customer_ticket_lines[-4].strip() == "Grazie!"
+    assert customer_ticket_lines[-3:] == ["", "", ""]
     production_ticket = next(path.read_text(encoding="utf-8") for path in output_files if "_production_" in path.name)
     assert "QTA 2" in production_ticket
     assert "PANINO SALAMELLA" in production_ticket
@@ -337,6 +342,50 @@ def test_usb_printer_job_dispatch_is_recorded(db_session, monkeypatch):
     result = printing.print_order(db_session, order.id, include_customer=True, include_production=False)
     assert result.jobs[0].status == "printed"
     assert sent == {"job_type": "customer", "printer_ip": "04b8:0e15", "order_id": order.id}
+
+
+def test_escpos_payload_contains_the_same_text_as_preview(db_session):
+    product = db_session.scalar(select(Product).where(Product.name == "Panino salamella"))
+    product.name = "Panino salamella con cipolle caramellate e salsa speciale"
+    db_session.commit()
+
+    order = create_confirmed_order(
+        db_session,
+        parse_cart_json(json.dumps([{"product_id": product.id, "quantity": 1}])),
+        source="test",
+    )
+    customer_printer = db_session.scalar(select(Printer).where(Printer.is_customer_printer.is_(True)))
+    customer_text = printing.build_customer_ticket(order)
+    customer_job = PrintJob(
+        order_id=order.id,
+        printer_id=customer_printer.id,
+        job_type="customer",
+        status="pending",
+        payload_text=customer_text,
+    )
+    customer_data = printing._build_escpos_payload(customer_job, order, customer_printer)
+    customer_decoded = customer_data.decode("cp858", errors="ignore")
+
+    assert b"\x1d!\x11" in customer_data
+    assert all(len(line) <= printing.CUSTOMER_TICKET_WIDTH for line in customer_text.splitlines())
+    for line in customer_text.splitlines():
+        if line.strip():
+            assert line.strip() in customer_decoded
+
+    kitchen_printer = db_session.scalar(select(Printer).where(Printer.name == "Kitchen Printer"))
+    production_text = printing.build_production_ticket(order, kitchen_printer, [order.items[0]])
+    production_job = PrintJob(
+        order_id=order.id,
+        printer_id=kitchen_printer.id,
+        job_type="production",
+        status="pending",
+        payload_text=production_text,
+    )
+    production_decoded = printing._build_escpos_payload(production_job, order, kitchen_printer).decode("cp858", errors="ignore")
+
+    for line in production_text.splitlines():
+        if line.strip():
+            assert line.strip() in production_decoded
 
 
 def test_reprint_customer_and_production(cashier_client, db_session):

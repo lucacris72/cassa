@@ -36,7 +36,7 @@ class UsbPrinterDevice:
     interface_class: int | None
 
 
-CUSTOMER_TICKET_WIDTH = 42
+CUSTOMER_TICKET_WIDTH = 38
 PRODUCTION_TICKET_WIDTH = 42
 
 
@@ -84,6 +84,7 @@ def _production_item_summary(item: OrderItem) -> list[str]:
 
 def build_customer_ticket(order: Order) -> str:
     label = _order_label(order)
+    total = format_money(order.total_cents)
     lines = [
         "=" * CUSTOMER_TICKET_WIDTH,
         _center("COMANDA CLIENTE"),
@@ -97,13 +98,17 @@ def build_customer_ticket(order: Order) -> str:
         lines.append("")
     lines.extend(
         [
-            "-" * CUSTOMER_TICKET_WIDTH,
-            _money_line("TOTALE", order.total_cents),
+            "*" * CUSTOMER_TICKET_WIDTH,
+            _center("TOTALE"),
+            _center(total),
+            "*" * CUSTOMER_TICKET_WIDTH,
             "",
             _center("RITIRO ORDINE"),
             _center(label),
             "",
-            "Grazie!",
+            _center("Grazie!"),
+            "",
+            "",
             "",
         ]
     )
@@ -116,16 +121,16 @@ def build_production_ticket(order: Order, printer: Printer, items: list[OrderIte
     lines = [
         "=" * PRODUCTION_TICKET_WIDTH,
         _center(title, PRODUCTION_TICKET_WIDTH),
-        _center("ORDINE"),
-        _center(label),
-        _center(f"Ora {datetime.now().strftime('%H:%M')}"),
+        _center("ORDINE", PRODUCTION_TICKET_WIDTH),
+        _center(label, PRODUCTION_TICKET_WIDTH),
+        _center(f"Ora {datetime.now().strftime('%H:%M')}", PRODUCTION_TICKET_WIDTH),
         "=" * PRODUCTION_TICKET_WIDTH,
         "",
     ]
     for item in items:
         lines.extend(_production_item_summary(item))
         lines.extend(["", "-" * PRODUCTION_TICKET_WIDTH, ""])
-    lines.append("")
+    lines.extend([_center("FINE COMANDA", PRODUCTION_TICKET_WIDTH), ""])
     return "\n".join(lines)
 
 
@@ -171,72 +176,74 @@ def _escpos_reset_text() -> bytes:
     return b"\x1ba\x00\x1bE\x00\x1d!\x00"
 
 
-def _build_customer_escpos(order: Order) -> bytes:
+def _is_separator_line(text: str) -> bool:
+    return bool(text) and len(set(text)) == 1 and text[0] in {"=", "-", "*"}
+
+
+def _is_item_title_line(text: str) -> bool:
+    if " x " not in text or "=" in text:
+        return False
+    quantity, _, _ = text.partition(" x ")
+    return quantity.strip().isdigit()
+
+
+def _build_customer_escpos(job: PrintJob, order: Order) -> bytes:
     label = _order_label(order)
-    parts = [
-        b"\x1b@",
-        _escpos_text("COMANDA CLIENTE", align="center", bold=True),
-        _escpos_text("ORDINE", align="center", bold=True, size=0x01),
-        _escpos_text(label, align="center", bold=True, size=0x22),
-        _escpos_text("-" * CUSTOMER_TICKET_WIDTH, align="center"),
-    ]
-    for item in order.items:
-        parts.append(_escpos_text(f"{item.quantity} x {item.product_name.upper()}", bold=True, size=0x10))
-        parts.append(_escpos_text(f"{item.quantity} x {format_money(item.unit_price_cents)} = {format_money(item.line_total_cents)}"))
-        if item.notes:
-            for line in _wrap_prefixed("Nota: ", item.notes, CUSTOMER_TICKET_WIDTH):
-                parts.append(_escpos_text(line))
-        parts.append(b"\n")
-    parts.extend(
-        [
-            _escpos_text("-" * CUSTOMER_TICKET_WIDTH),
-            _escpos_text(_money_line("TOTALE", order.total_cents), bold=True),
-            b"\n",
-            _escpos_text("RITIRO ORDINE", align="center", bold=True),
-            _escpos_text(label, align="center", bold=True, size=0x22),
-            b"\n",
-            _escpos_text("Grazie!", align="center"),
-            _escpos_reset_text(),
-            b"\n\n\n\x1dV\x00",
-        ]
-    )
+    total = format_money(order.total_cents)
+    parts = [b"\x1b@"]
+    for raw_line in job.payload_text.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            parts.append(b"\n")
+        elif _is_separator_line(stripped):
+            parts.append(_escpos_text(stripped, align="center"))
+        elif stripped == "COMANDA CLIENTE":
+            parts.append(_escpos_text(stripped, align="center", bold=True))
+        elif stripped == "ORDINE":
+            parts.append(_escpos_text(stripped, align="center", bold=True, size=0x01))
+        elif stripped == label:
+            parts.append(_escpos_text(stripped, align="center", bold=True, size=0x22))
+        elif stripped == "TOTALE":
+            parts.append(_escpos_text(stripped, align="center", bold=True, size=0x01))
+        elif stripped == total:
+            parts.append(_escpos_text(stripped, align="center", bold=True, size=0x11))
+        elif stripped == "RITIRO ORDINE":
+            parts.append(_escpos_text(stripped, align="center", bold=True))
+        elif stripped == "Grazie!":
+            parts.append(_escpos_text(stripped, align="center"))
+        elif _is_item_title_line(stripped):
+            parts.append(_escpos_text(line, bold=True))
+        else:
+            parts.append(_escpos_text(line))
+    parts.extend([_escpos_reset_text(), b"\n\n\n\x1dV\x00"])
     return b"".join(parts)
 
 
-def _production_items_for_printer(order: Order, printer: Printer) -> list[OrderItem]:
-    items = [item for item in order.items if item.printer_id == printer.id]
-    return items or list(order.items)
-
-
-def _build_production_escpos(order: Order, printer: Printer) -> bytes:
+def _build_production_escpos(job: PrintJob, order: Order, printer: Printer) -> bytes:
     label = _order_label(order)
-    parts = [
-        b"\x1b@",
-        _escpos_text(printer.name.upper(), align="center", bold=True),
-        _escpos_text("ORDINE", align="center", bold=True, size=0x11),
-        _escpos_text(label, align="center", bold=True, size=0x22),
-        _escpos_text(datetime.now().strftime("%H:%M"), align="center", bold=True),
-        _escpos_text("-" * PRODUCTION_TICKET_WIDTH, align="center"),
-    ]
-    for item in _production_items_for_printer(order, printer):
-        parts.extend(
-            [
-                _escpos_text(f"QTA {item.quantity}", bold=True, size=0x11),
-                _escpos_text(item.product_name.upper(), bold=True, size=0x10),
-            ]
-        )
-        if item.notes:
-            parts.append(_escpos_text("NOTE", bold=True))
-            for line in _wrap_prefixed("", item.notes, PRODUCTION_TICKET_WIDTH):
-                parts.append(_escpos_text(line))
-        parts.append(_escpos_text("-" * PRODUCTION_TICKET_WIDTH))
-    parts.extend(
-        [
-            _escpos_text("FINE COMANDA", align="center", bold=True),
-            _escpos_reset_text(),
-            b"\n\n\n\x1dV\x00",
-        ]
-    )
+    title = printer.name.upper()
+    parts = [b"\x1b@"]
+    for raw_line in job.payload_text.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            parts.append(b"\n")
+        elif _is_separator_line(stripped):
+            parts.append(_escpos_text(stripped, align="center"))
+        elif stripped in {title, "ORDINE", "FINE COMANDA"}:
+            parts.append(_escpos_text(stripped, align="center", bold=True))
+        elif stripped == label:
+            parts.append(_escpos_text(stripped, align="center", bold=True, size=0x22))
+        elif stripped.startswith("Ora "):
+            parts.append(_escpos_text(stripped, align="center", bold=True))
+        elif stripped.startswith("QTA "):
+            parts.append(_escpos_text(stripped, bold=True, size=0x01))
+        elif stripped == "NOTE:":
+            parts.append(_escpos_text(stripped, bold=True))
+        else:
+            parts.append(_escpos_text(line, bold=stripped.isupper()))
+    parts.extend([_escpos_reset_text(), b"\n\n\n\x1dV\x00"])
     return b"".join(parts)
 
 
@@ -247,9 +254,9 @@ def _build_plain_escpos(job: PrintJob) -> bytes:
 
 def _build_escpos_payload(job: PrintJob, order: Order, printer: Printer) -> bytes:
     if job.job_type == "customer":
-        return _build_customer_escpos(order)
+        return _build_customer_escpos(job, order)
     if job.job_type == "production":
-        return _build_production_escpos(order, printer)
+        return _build_production_escpos(job, order, printer)
     return _build_plain_escpos(job)
 
 

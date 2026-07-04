@@ -853,8 +853,14 @@ th {
 pre {
   background: #f2f4f7;
   border-radius: 8px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.35;
+  max-width: 100%;
   overflow: auto;
   padding: 12px;
+  white-space: pre;
+  width: fit-content;
 }
 
 .mobile-order-page .cashier-layout {
