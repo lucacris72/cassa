@@ -36,7 +36,10 @@
         {% set failed_count = order.print_jobs|selectattr("status", "equalto", "failed")|list|length %}
         <a class="order-row" href="/orders/{{ order.id }}">
           <strong>T{{ order.register_session }} · {% if order.order_number %}N. {{ "%03d"|format(order.order_number) }}{% else %}S/N{% endif %}</strong>
-          <span>{{ order.status }}</span>
+          <span class="order-status">
+            {{ order.status }}
+            {% if order.pickup_later %}<span class="status-badge pickup-later-badge">Ritira piu tardi</span>{% endif %}
+          </span>
           {% if failed_count %}
             <span class="status-badge failed">Stampa KO · {{ failed_count }}</span>
           {% endif %}

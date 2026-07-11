@@ -80,10 +80,18 @@ def create_confirmed_order(
     source: str,
     notes: str | None = None,
     mark_paid: bool = False,
+    pickup_later: bool = False,
 ) -> Order:
     try:
         begin_immediate_if_sqlite(db)
-        order = stage_confirmed_order(db, lines, source=source, notes=notes, mark_paid=mark_paid)
+        order = stage_confirmed_order(
+            db,
+            lines,
+            source=source,
+            notes=notes,
+            mark_paid=mark_paid,
+            pickup_later=pickup_later,
+        )
         db.commit()
         db.refresh(order)
         return order
@@ -102,6 +110,7 @@ def stage_confirmed_order(
     source: str,
     notes: str | None = None,
     mark_paid: bool = False,
+    pickup_later: bool = False,
 ) -> Order:
     business_date = business_date_for()
     register_session = current_register_session(db, business_date)
@@ -113,6 +122,7 @@ def stage_confirmed_order(
         total_cents=0,
         source=source,
         notes=notes,
+        pickup_later=pickup_later,
         paid_at=datetime.now(UTC) if mark_paid else None,
     )
     items, total_cents = _build_order_items(db, lines)
@@ -123,7 +133,14 @@ def stage_confirmed_order(
     return order
 
 
-def create_pending_order(db: Session, lines: list[CartLine], *, source: str, notes: str | None = None) -> Order:
+def create_pending_order(
+    db: Session,
+    lines: list[CartLine],
+    *,
+    source: str,
+    notes: str | None = None,
+    pickup_later: bool = False,
+) -> Order:
     try:
         business_date = business_date_for()
         items, total_cents = _build_order_items(db, lines)
@@ -135,6 +152,7 @@ def create_pending_order(db: Session, lines: list[CartLine], *, source: str, not
             total_cents=total_cents,
             source=source,
             notes=notes,
+            pickup_later=pickup_later,
             items=items,
         )
         db.add(order)
@@ -146,7 +164,14 @@ def create_pending_order(db: Session, lines: list[CartLine], *, source: str, not
         raise
 
 
-def update_pending_order(db: Session, order_id: int, lines: list[CartLine], *, notes: str | None = None) -> Order:
+def update_pending_order(
+    db: Session,
+    order_id: int,
+    lines: list[CartLine],
+    *,
+    notes: str | None = None,
+    pickup_later: bool = False,
+) -> Order:
     try:
         order = db.get(Order, order_id)
         if order is None:
@@ -157,6 +182,7 @@ def update_pending_order(db: Session, order_id: int, lines: list[CartLine], *, n
         order.items = items
         order.total_cents = total_cents
         order.notes = notes
+        order.pickup_later = pickup_later
         db.commit()
         db.refresh(order)
         return order

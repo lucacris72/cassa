@@ -4,10 +4,10 @@ import json
 from io import BytesIO
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from restaurant_pos.app.auth import hash_pin
-from restaurant_pos.app.models import Category, Order, OrderItem, Printer, PrintJob, Product, ProductImportAlias, RegisterClosure, Reservation, ReservationItem, User
+from restaurant_pos.app.models import Category, Order, OrderItem, Printer, PrintJob, Product, ProductImportAlias, RegisterClosure, RegisterClosureProduct, Reservation, ReservationItem, User
 from restaurant_pos.app.services import printing
 from restaurant_pos.app.services.numbering import business_date_for
 from restaurant_pos.app.services.orders import create_confirmed_order, parse_cart_json
@@ -605,6 +605,54 @@ def test_escpos_payload_contains_the_same_text_as_preview(db_session):
             assert line.strip() in production_decoded
 
 
+def test_pickup_later_is_visible_persisted_and_printed(cashier_client, db_session):
+    assert 'name="pickup_later"' in cashier_client.get("/").text
+    assert 'name="pickup_later"' in cashier_client.get("/mobile").text
+    product = db_session.scalar(select(Product).where(Product.name == "Panino salamella"))
+
+    response = cashier_client.post(
+        "/orders",
+        data={
+            "cart_json": json.dumps([{"product_id": product.id, "quantity": 1}]),
+            "pickup_later": "true",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    order = db_session.scalar(select(Order).order_by(Order.id.desc()))
+    assert order.pickup_later is True
+
+    jobs = db_session.scalars(select(PrintJob).where(PrintJob.order_id == order.id)).all()
+    assert {job.job_type for job in jobs} == {"customer", "production"}
+    assert all("RITIRA PIU TARDI" in job.payload_text for job in jobs)
+    for job in jobs:
+        printer = db_session.get(Printer, job.printer_id)
+        data = printing._build_escpos_payload(job, order, printer)
+        assert printing._escpos_text("RITIRA PIU TARDI", align="center", bold=True, size=0x11) in data
+
+    production_job = next(job for job in jobs if job.job_type == "production")
+    production_printer = db_session.get(Printer, production_job.printer_id)
+    production_data = printing._build_escpos_payload(production_job, order, production_printer)
+    assert printing._escpos_text(
+        "PANINO SALAMELLA",
+        bold=True,
+        size=printing.PRODUCTION_PRODUCT_TEXT_SIZE,
+    ) in production_data
+
+    mobile_response = cashier_client.post(
+        "/mobile/orders",
+        data={
+            "cart_json": json.dumps([{"product_id": product.id, "quantity": 1}]),
+            "pickup_later": "true",
+        },
+        follow_redirects=False,
+    )
+    assert mobile_response.status_code == 303
+    mobile_order = db_session.scalar(select(Order).order_by(Order.id.desc()))
+    assert mobile_order.source == "mobile"
+    assert mobile_order.pickup_later is True
+
+
 def test_reprint_customer_and_production(cashier_client, db_session):
     product = db_session.scalar(select(Product).where(Product.name == "Patatine"))
     cashier_client.post(
@@ -660,6 +708,103 @@ def test_close_register_creates_sales_history_and_closes_orders(cashier_client, 
     detail = cashier_client.get(f"/closures/{closure.id}")
     assert detail.status_code == 200
     assert "Chiusura" in detail.text
+
+
+def test_closure_product_summary_and_excel(cashier_client, db_session):
+    water = db_session.scalar(select(Product).where(Product.name == "Acqua"))
+    coffee = db_session.scalar(select(Product).where(Product.name == "Caffe"))
+    first_order = create_confirmed_order(
+        db_session,
+        parse_cart_json(json.dumps([{"product_id": water.id, "quantity": 2}])),
+        source="test",
+    )
+    create_confirmed_order(
+        db_session,
+        parse_cart_json(
+            json.dumps(
+                [
+                    {"product_id": water.id, "quantity": 1},
+                    {"product_id": coffee.id, "quantity": 2},
+                ]
+            )
+        ),
+        source="test",
+    )
+
+    response = cashier_client.post(
+        "/closures",
+        data={"business_date": first_order.business_date, "register_session": "1"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    db_session.expire_all()
+    closure = db_session.scalar(select(RegisterClosure).where(RegisterClosure.business_date == first_order.business_date))
+    products = {product.product_name: product for product in closure.product_summaries}
+    assert products["Acqua"].quantity == 3
+    assert products["Acqua"].sales_total_cents == 300
+    assert products["Caffe"].quantity == 2
+    assert products["Caffe"].sales_total_cents == 240
+
+    closed_order = db_session.get(Order, first_order.id)
+    closed_order.status = "cancelled"
+    db_session.commit()
+    overview = cashier_client.get(f"/closures?date={closure.business_date}&session=1")
+    assert overview.status_code == 200
+    assert "5 pezzi" in overview.text
+
+    detail = cashier_client.get(f"/closures/{closure.id}")
+    assert detail.status_code == 200
+    assert "5 pezzi" in detail.text
+    assert "Riepilogo prodotti" in detail.text
+    assert "Scarica Excel" in detail.text
+
+    export = cashier_client.get(f"/closures/{closure.id}/export.xlsx")
+    assert export.status_code == 200
+    assert export.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert f"chiusura-{closure.business_date}-T1.xlsx" in export.headers["content-disposition"]
+
+    import openpyxl
+
+    workbook = openpyxl.load_workbook(BytesIO(export.content), data_only=True)
+    assert workbook.sheetnames == ["Riepilogo", "Prodotti"]
+    product_rows = list(workbook["Prodotti"].iter_rows(min_row=2, values_only=True))
+    exported_products = {row[1]: row for row in product_rows}
+    assert exported_products["Acqua"][2:] == (3, 3)
+    assert exported_products["Caffe"][2:] == (2, 2.4)
+
+
+def test_sqlite_migration_adds_pickup_flag_and_backfills_closure_products(db_session):
+    from restaurant_pos.app.database import run_sqlite_migrations
+
+    engine = db_session.get_bind()
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE orders DROP COLUMN pickup_later"))
+    run_sqlite_migrations()
+    with engine.connect() as connection:
+        columns = connection.execute(text("PRAGMA table_info(orders)")).mappings().all()
+    assert "pickup_later" in {column["name"] for column in columns}
+
+    product = db_session.scalar(select(Product).where(Product.name == "Acqua"))
+    order = create_confirmed_order(
+        db_session,
+        parse_cart_json(json.dumps([{"product_id": product.id, "quantity": 2}])),
+        source="test",
+    )
+    from restaurant_pos.app.services.closures import close_register
+
+    user = db_session.scalar(select(User).where(User.name == "cashier"))
+    closure = close_register(db_session, order.business_date, user, register_session=order.register_session)
+    db_session.execute(text("DELETE FROM register_closure_products WHERE closure_id = :closure_id"), {"closure_id": closure.id})
+    db_session.commit()
+    run_sqlite_migrations()
+    summary = db_session.scalar(
+        select(RegisterClosureProduct).where(RegisterClosureProduct.closure_id == closure.id)
+    )
+    assert summary is not None
+    assert summary.product_name == "Acqua"
+    assert summary.quantity == 2
 
 
 def test_order_number_resets_after_register_closure(cashier_client, db_session):

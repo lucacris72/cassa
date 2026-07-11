@@ -5,16 +5,48 @@
     <section class="panel">
       <div class="section-header">
         <h1>Chiusura {{ closure.business_date }} · Turno {{ closure.register_session }}</h1>
-        <a class="button primary" href="/">Nuovo ordine</a>
+        <div class="actions">
+          <a class="button" href="/closures/{{ closure.id }}/export.xlsx">Scarica Excel</a>
+          <a class="button primary" href="/">Nuovo ordine</a>
+        </div>
       </div>
       <div class="summary-grid">
         <div class="metric"><span>Ordini vendita</span><strong>{{ closure.order_count }}</strong></div>
+        <div class="metric"><span>Prodotti venduti</span><strong>{{ product_quantity }}</strong></div>
         <div class="metric"><span>Vendite</span><strong>{{ closure.sales_total_cents|money }}</strong></div>
         <div class="metric"><span>Incasso</span><strong>{{ closure.cash_total_cents|money }}</strong></div>
         <div class="metric"><span>Annullati</span><strong>{{ closure.cancelled_count }}</strong></div>
       </div>
       <p>Chiusa alle {{ closure.closed_at.strftime("%H:%M") }}{% if closure.closed_by %} da {{ closure.closed_by.name }}{% endif %}</p>
       {% if closure.notes %}<p><strong>Note:</strong> {{ closure.notes }}</p>{% endif %}
+    </section>
+
+    <section class="panel">
+      <div class="section-header">
+        <h2>Riepilogo prodotti</h2>
+        <strong>{{ product_quantity }} pezzi</strong>
+      </div>
+      {% if product_summaries %}
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Categoria</th><th>Prodotto</th><th class="numeric">Quantita</th><th class="numeric">Vendite</th></tr>
+            </thead>
+            <tbody>
+              {% for product in product_summaries %}
+                <tr>
+                  <td>{{ product.category_name }}</td>
+                  <td><strong>{{ product.product_name }}</strong></td>
+                  <td class="numeric">{{ product.quantity }}</td>
+                  <td class="numeric">{{ product.sales_total_cents|money }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="muted">Nessun prodotto venduto in questa chiusura.</p>
+      {% endif %}
     </section>
 
     <section class="panel">

@@ -74,6 +74,7 @@ def create_order(
     cart_json: str = Form(...),
     notes: str = Form(""),
     mark_paid: bool = Form(False),
+    pickup_later: bool = Form(False),
     reservation_id: int = Form(0),
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin", "cashier")),
@@ -87,6 +88,7 @@ def create_order(
                 lines,
                 notes=notes.strip() or None,
                 mark_paid=mark_paid,
+                pickup_later=pickup_later,
             )
         else:
             order = order_service.create_confirmed_order(
@@ -95,6 +97,7 @@ def create_order(
                 source="cashier",
                 notes=notes.strip() or None,
                 mark_paid=mark_paid,
+                pickup_later=pickup_later,
             )
         result = print_order(db, order.id, customer_printer_id=user.customer_printer_id)
     except order_service.OrderError as exc:

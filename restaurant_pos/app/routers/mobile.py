@@ -56,12 +56,19 @@ def create_mobile_order(
     request: Request,
     cart_json: str = Form(...),
     notes: str = Form(""),
+    pickup_later: bool = Form(False),
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin", "cashier", "waiter")),
 ):
     try:
         lines = order_service.parse_cart_json(cart_json)
-        order = order_service.create_confirmed_order(db, lines, source="mobile", notes=notes.strip() or None)
+        order = order_service.create_confirmed_order(
+            db,
+            lines,
+            source="mobile",
+            notes=notes.strip() or None,
+            pickup_later=pickup_later,
+        )
         result = print_order(db, order.id, customer_printer_id=user.customer_printer_id)
     except Exception as exc:
         add_flash(request, f"Ordine mobile non salvato: {exc}", "error")

@@ -85,6 +85,7 @@ class Order(Base):
     total_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     source: Mapped[str] = mapped_column(String(40), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pickup_later: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -149,6 +150,27 @@ class RegisterClosure(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     closed_by: Mapped[User | None] = relationship()
+    product_summaries: Mapped[list[RegisterClosureProduct]] = relationship(
+        back_populates="closure",
+        cascade="all, delete-orphan",
+        order_by="RegisterClosureProduct.category_name, RegisterClosureProduct.product_name",
+    )
+
+
+class RegisterClosureProduct(Base):
+    __tablename__ = "register_closure_products"
+    __table_args__ = (
+        UniqueConstraint("closure_id", "category_name", "product_name", name="uq_closure_category_product"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    closure_id: Mapped[int] = mapped_column(ForeignKey("register_closures.id"), nullable=False)
+    category_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    product_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sales_total_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    closure: Mapped[RegisterClosure] = relationship(back_populates="product_summaries")
 
 
 class PrintJob(Base):

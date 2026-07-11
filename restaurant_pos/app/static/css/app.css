@@ -152,6 +152,39 @@ textarea {
   width: auto;
 }
 
+.pickup-later-toggle {
+  align-items: center;
+  background: #fff8e6;
+  border: 2px solid #e1b94f;
+  border-radius: 8px;
+  color: #694d00;
+  cursor: pointer;
+  display: flex;
+  font-size: 18px;
+  font-weight: 900;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 14px;
+}
+
+.pickup-later-toggle:has(input:checked) {
+  background: #ffe29a;
+  border-color: #9b6b00;
+  color: #513800;
+}
+
+.pickup-later-toggle input {
+  accent-color: #9b6b00;
+  flex: 0 0 auto;
+  height: 25px;
+  min-height: 25px;
+  width: 25px;
+}
+
+.pickup-later-toggle span {
+  line-height: 1.15;
+}
+
 .button,
 button {
   align-items: center;
@@ -624,6 +657,10 @@ button:hover {
   grid-template-columns: 340px minmax(0, 1fr);
 }
 
+.closure-products-panel {
+  grid-column: 1 / -1;
+}
+
 .narrow {
   margin: 0 auto;
   max-width: 560px;
@@ -632,6 +669,16 @@ button:hover {
 table {
   border-collapse: collapse;
   width: 100%;
+}
+
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.numeric {
+  text-align: right;
+  white-space: nowrap;
 }
 
 th,
@@ -712,6 +759,13 @@ th {
 
 .order-row.pending {
   border-color: #ffd48a;
+}
+
+.order-status {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .order-detail {
@@ -800,6 +854,11 @@ th {
   border-color: #ffc5be;
 }
 
+.metric.pickup-later-metric {
+  background: #fff8e6;
+  border-color: #e1b94f;
+}
+
 .status {
   background: #eef3f4;
   border-radius: 999px;
@@ -863,6 +922,11 @@ th {
 .status-badge.failed {
   background: #fff4f2;
   color: var(--danger);
+}
+
+.status-badge.pickup-later-badge {
+  background: #fff1c7;
+  color: #694d00;
 }
 
 .job.printed {
@@ -1006,6 +1070,11 @@ pre {
 
   .mobile-order-page .product-button .product-name {
     font-size: 14px;
+  }
+
+  .mobile-order-page .pickup-later-toggle {
+    font-size: 17px;
+    min-height: 58px;
   }
 
   .section-header,

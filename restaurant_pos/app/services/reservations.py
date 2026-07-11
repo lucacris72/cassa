@@ -374,6 +374,7 @@ def create_confirmed_order_from_reservation(
     *,
     notes: str | None = None,
     mark_paid: bool = False,
+    pickup_later: bool = False,
 ) -> Order:
     try:
         begin_immediate_if_sqlite(db)
@@ -388,6 +389,7 @@ def create_confirmed_order_from_reservation(
             source="reservation",
             notes=notes,
             mark_paid=mark_paid,
+            pickup_later=pickup_later,
         )
         reservation.status = "converted"
         reservation.order_id = order.id

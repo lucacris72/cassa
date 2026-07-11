@@ -15,6 +15,7 @@
       <div class="summary-grid">
         <div class="metric"><span>Turno</span><strong>{{ summary.register_session }}</strong></div>
         <div class="metric"><span>Ordini vendita</span><strong>{{ summary.order_count }}</strong></div>
+        <div class="metric"><span>Prodotti venduti</span><strong>{{ summary.product_quantity }}</strong></div>
         <div class="metric"><span>Vendite</span><strong>{{ summary.sales_total_cents|money }}</strong></div>
         <div class="metric"><span>Incasso</span><strong>{{ summary.cash_total_cents|money }}</strong></div>
         <div class="metric"><span>Aperti</span><strong>{{ summary.open_count }}</strong></div>
@@ -52,6 +53,34 @@
           <p>Nessuna chiusura registrata.</p>
         {% endfor %}
       </div>
+    </section>
+
+    <section class="panel closure-products-panel">
+      <div class="section-header">
+        <h2>Prodotti venduti nel turno</h2>
+        <strong>{{ summary.product_quantity }} pezzi</strong>
+      </div>
+      {% if summary.product_summaries %}
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Categoria</th><th>Prodotto</th><th class="numeric">Quantita</th><th class="numeric">Vendite</th></tr>
+            </thead>
+            <tbody>
+              {% for product in summary.product_summaries %}
+                <tr>
+                  <td>{{ product.category_name }}</td>
+                  <td><strong>{{ product.product_name }}</strong></td>
+                  <td class="numeric">{{ product.quantity }}</td>
+                  <td class="numeric">{{ product.sales_total_cents|money }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="muted">Nessun prodotto venduto in questo turno.</p>
+      {% endif %}
     </section>
   </section>
 {% endblock %}

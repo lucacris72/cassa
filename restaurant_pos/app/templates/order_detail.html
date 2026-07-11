@@ -25,6 +25,9 @@
       <div class="metric"><span>Totale</span><strong>{{ order.total_cents|money }}</strong></div>
       <div class="metric"><span>Righe</span><strong>{{ order.items|length }}</strong></div>
       <div class="metric"><span>Turno</span><strong>T{{ order.register_session }}</strong></div>
+      {% if order.pickup_later %}
+        <div class="metric pickup-later-metric"><span>Ritiro</span><strong>Piu tardi</strong></div>
+      {% endif %}
       {% if failed_print_jobs %}
         <div class="metric warning"><span>Stampe fallite</span><strong>{{ failed_print_jobs|length }}</strong></div>
       {% endif %}
@@ -47,6 +50,10 @@
           <label>
             Note ordine
             <textarea name="notes" id="pending-order-notes" rows="3">{{ order.notes or "" }}</textarea>
+          </label>
+          <label class="pickup-later-toggle">
+            <input type="checkbox" name="pickup_later" value="true" {% if order.pickup_later %}checked{% endif %}>
+            <span>Ritira piu tardi</span>
           </label>
         </form>
 

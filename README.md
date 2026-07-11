@@ -10,7 +10,7 @@ Non gestisce scontrini fiscali, registratori telematici, fatturazione, pagamenti
 - Cassa touch-friendly con prodotti raggruppati per categoria.
 - Ordini con numero progressivo per giornata operativa.
 - Storico ordini con dettaglio, ristampa, pagato, consegnato e annullato.
-- Chiusura cassa giornaliera con snapshot vendite e incasso.
+- Chiusura cassa con snapshot di vendite, incasso e quantita per prodotto, esportabile in Excel.
 - Admin prodotti, categorie e stampanti.
 - Ticket cliente e ticket produzione raggruppati per stampante.
 - Import prenotazioni da file Excel Google Moduli e conversione in comanda da revisionare.
@@ -18,6 +18,7 @@ Non gestisce scontrini fiscali, registratori telematici, fatturazione, pagamenti
 - Stampante ESC/POS di rete su IP/porta, default `9100`.
 - Stampante ESC/POS USB diretta tramite VID/PID, senza coda stampanti Windows.
 - Pagina mobile LAN per confermare e stampare comande dal telefono.
+- Ordini `Ritira piu tardi` evidenziati sui ticket cliente e produzione.
 
 ## Installazione
 
@@ -103,7 +104,7 @@ Cliente: si
 
 Il supporto USB usa `pyusb` e `libusb-package`. Se Windows mantiene il dispositivo occupato con un driver non compatibile libusb, il test stampante puo fallire con accesso negato.
 
-Ogni stampa ordine crea prima un record `print_jobs`, poi tenta la stampa. Se la stampante non risponde, l'ordine resta salvato e il job risulta `failed`.
+Ogni stampa ordine crea prima un record `print_jobs`, poi tenta la stampa. Se la stampante non risponde, l'ordine resta salvato e il job risulta `failed`. Sulle comande di produzione i nomi prodotto vengono stampati in grassetto e doppia altezza.
 
 ## Test fake printer
 
@@ -121,7 +122,8 @@ Da `Chiusure` selezionare la giornata operativa e premere `Chiudi turno e azzera
 
 La chiusura:
 
-- registra uno snapshot di vendite e incasso;
+- registra uno snapshot di vendite, incasso e quantita vendute per prodotto;
+- permette di scaricare il riepilogo della chiusura in formato Excel;
 - marca come consegnati e pagati gli ordini vendita ancora aperti;
 - lascia fuori gli ordini annullati;
 - blocca la chiusura se ci sono eventuali ordini ancora da confermare;

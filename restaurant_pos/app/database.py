@@ -90,6 +90,7 @@ def _table_exists(conn, table_name: str) -> bool:
 def _rebuild_orders_table(conn) -> None:
     columns = _table_columns(conn, "orders")
     session_expr = "COALESCE(register_session, 1)" if "register_session" in columns else "1"
+    pickup_later_expr = "COALESCE(pickup_later, 0)" if "pickup_later" in columns else "0"
     conn.execute(text("DROP TABLE IF EXISTS orders_new"))
     conn.execute(
         text(
@@ -103,6 +104,7 @@ def _rebuild_orders_table(conn) -> None:
               total_cents INTEGER NOT NULL,
               source VARCHAR(40) NOT NULL,
               notes TEXT,
+              pickup_later BOOLEAN NOT NULL DEFAULT 0,
               created_at DATETIME NOT NULL,
               paid_at DATETIME,
               completed_at DATETIME,
@@ -117,11 +119,11 @@ def _rebuild_orders_table(conn) -> None:
             f"""
             INSERT INTO orders_new (
               id, order_number, business_date, register_session, status, total_cents,
-              source, notes, created_at, paid_at, completed_at
+              source, notes, pickup_later, created_at, paid_at, completed_at
             )
             SELECT
               id, order_number, business_date, {session_expr}, status, total_cents,
-              source, notes, created_at, paid_at, completed_at
+              source, notes, {pickup_later_expr}, created_at, paid_at, completed_at
             FROM orders
             """
         )
@@ -184,6 +186,9 @@ def run_sqlite_migrations() -> None:
             order_unique_indexes = _unique_index_columns(conn, "orders")
             if "register_session" not in order_columns or ["business_date", "order_number"] in order_unique_indexes:
                 _rebuild_orders_table(conn)
+                order_columns = _table_columns(conn, "orders")
+            if "pickup_later" not in order_columns:
+                conn.execute(text("ALTER TABLE orders ADD COLUMN pickup_later BOOLEAN NOT NULL DEFAULT 0"))
         if _table_exists(conn, "register_closures"):
             closure_columns = _table_columns(conn, "register_closures")
             closure_unique_indexes = _unique_index_columns(conn, "register_closures")
@@ -219,6 +224,39 @@ def run_sqlite_migrations() -> None:
                     WHERE ri.product_id IS NOT NULL
                       AND ri.product_name IS NOT NULL
                       AND TRIM(ri.product_name) != ''
+                    """
+                )
+            )
+        if (
+            _table_exists(conn, "register_closure_products")
+            and _table_exists(conn, "register_closures")
+            and _table_exists(conn, "orders")
+            and _table_exists(conn, "order_items")
+        ):
+            conn.execute(
+                text(
+                    """
+                    INSERT OR IGNORE INTO register_closure_products (
+                      closure_id, category_name, product_name, quantity, sales_total_cents
+                    )
+                    SELECT
+                      closure.id,
+                      item.category_name,
+                      item.product_name,
+                      SUM(item.quantity),
+                      SUM(item.line_total_cents)
+                    FROM register_closures closure
+                    JOIN orders orders_in_closure
+                      ON orders_in_closure.business_date = closure.business_date
+                     AND orders_in_closure.register_session = closure.register_session
+                    JOIN order_items item ON item.order_id = orders_in_closure.id
+                    WHERE orders_in_closure.status IN ('confirmed', 'paid', 'delivered')
+                      AND NOT EXISTS (
+                        SELECT 1
+                        FROM register_closure_products existing
+                        WHERE existing.closure_id = closure.id
+                      )
+                    GROUP BY closure.id, item.category_name, item.product_name
                     """
                 )
             )

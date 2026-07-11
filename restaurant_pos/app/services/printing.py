@@ -44,6 +44,7 @@ class UsbPrinterDevice:
 CUSTOMER_TICKET_WIDTH = 38
 PRODUCTION_TICKET_WIDTH = 42
 NETWORK_RETRY_DELAYS_SECONDS = (0.5, 1.5)
+PRODUCTION_PRODUCT_TEXT_SIZE = 0x01
 
 
 def _order_label(order: Order) -> str:
@@ -88,6 +89,10 @@ def _production_item_summary(item: OrderItem) -> list[str]:
     return lines
 
 
+def _pickup_later_banner(width: int) -> list[str]:
+    return ["!" * width, _center("RITIRA PIU TARDI", width), "!" * width, ""]
+
+
 def build_customer_ticket(order: Order) -> str:
     label = _order_label(order)
     total = format_money(order.total_cents)
@@ -99,6 +104,8 @@ def build_customer_ticket(order: Order) -> str:
         "=" * CUSTOMER_TICKET_WIDTH,
         "",
     ]
+    if order.pickup_later:
+        lines.extend(_pickup_later_banner(CUSTOMER_TICKET_WIDTH))
     for item in order.items:
         lines.extend(_line_item_summary(item))
         lines.append("")
@@ -133,6 +140,8 @@ def build_production_ticket(order: Order, printer: Printer, items: list[OrderIte
         "=" * PRODUCTION_TICKET_WIDTH,
         "",
     ]
+    if order.pickup_later:
+        lines.extend(_pickup_later_banner(PRODUCTION_TICKET_WIDTH))
     for item in items:
         lines.extend(_production_item_summary(item))
         lines.extend(["", "-" * PRODUCTION_TICKET_WIDTH, ""])
@@ -188,7 +197,7 @@ def _escpos_finish(printer: Printer) -> bytes:
 
 
 def _is_separator_line(text: str) -> bool:
-    return bool(text) and len(set(text)) == 1 and text[0] in {"=", "-", "*"}
+    return bool(text) and len(set(text)) == 1 and text[0] in {"=", "-", "*", "!"}
 
 
 def _is_item_title_line(text: str) -> bool:
@@ -211,6 +220,8 @@ def _build_customer_escpos(job: PrintJob, order: Order, printer: Printer) -> byt
             parts.append(_escpos_text(stripped, align="center"))
         elif stripped == "COMANDA CLIENTE":
             parts.append(_escpos_text(stripped, align="center", bold=True))
+        elif stripped == "RITIRA PIU TARDI":
+            parts.append(_escpos_text(stripped, align="center", bold=True, size=0x11))
         elif stripped == "ORDINE":
             parts.append(_escpos_text(stripped, align="center", bold=True, size=0x01))
         elif stripped == label:
@@ -235,21 +246,29 @@ def _build_production_escpos(job: PrintJob, order: Order, printer: Printer) -> b
     label = _order_label(order)
     title = printer.name.upper()
     parts = [b"\x1b@"]
+    reading_product_name = False
     for raw_line in job.payload_text.splitlines():
         line = raw_line.rstrip()
         stripped = line.strip()
         if not stripped:
             parts.append(b"\n")
+            reading_product_name = False
         elif _is_separator_line(stripped):
             parts.append(_escpos_text(stripped, align="center"))
+            reading_product_name = False
+        elif reading_product_name:
+            parts.append(_escpos_text(line, bold=True, size=PRODUCTION_PRODUCT_TEXT_SIZE))
         elif stripped in {title, "ORDINE", "FINE COMANDA"}:
             parts.append(_escpos_text(stripped, align="center", bold=True))
+        elif stripped == "RITIRA PIU TARDI":
+            parts.append(_escpos_text(stripped, align="center", bold=True, size=0x11))
         elif stripped == label:
             parts.append(_escpos_text(stripped, align="center", bold=True, size=0x22))
         elif stripped.startswith("Ora "):
             parts.append(_escpos_text(stripped, align="center", bold=True))
         elif stripped.startswith("QTA "):
             parts.append(_escpos_text(stripped, bold=True, size=0x01))
+            reading_product_name = True
         elif stripped == "NOTE:":
             parts.append(_escpos_text(stripped, bold=True))
         else:

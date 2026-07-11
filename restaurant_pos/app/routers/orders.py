@@ -111,12 +111,19 @@ def edit_pending_order(
     request: Request,
     cart_json: str = Form(...),
     notes: str = Form(""),
+    pickup_later: bool = Form(False),
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin", "cashier")),
 ):
     try:
         lines = order_service.parse_cart_json(cart_json)
-        order_service.update_pending_order(db, order_id, lines, notes=notes.strip() or None)
+        order_service.update_pending_order(
+            db,
+            order_id,
+            lines,
+            notes=notes.strip() or None,
+            pickup_later=pickup_later,
+        )
     except order_service.OrderError as exc:
         add_flash(request, str(exc), "error")
     except Exception as exc:

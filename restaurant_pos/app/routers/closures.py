@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..auth import add_flash, pop_flashes, require_user
 from ..database import get_db
 from ..models import Order, RegisterClosure, User
-from ..services.closures import ClosureError, close_register, get_sales_summary
+from ..services.closures import ClosureError, build_closure_excel, close_register, get_sales_summary
 from ..services.numbering import business_date_for, current_register_session
 from ..templating import render
 
@@ -69,7 +69,11 @@ def closure_detail(
     db: Session = Depends(get_db),
     user: User = Depends(require_user("admin", "cashier")),
 ):
-    closure = db.get(RegisterClosure, closure_id)
+    closure = db.scalar(
+        select(RegisterClosure)
+        .where(RegisterClosure.id == closure_id)
+        .options(selectinload(RegisterClosure.product_summaries), selectinload(RegisterClosure.closed_by))
+    )
     if closure is None:
         add_flash(request, "Chiusura non trovata", "error")
         return RedirectResponse("/closures", status_code=303)
@@ -87,5 +91,28 @@ def closure_detail(
             "flashes": pop_flashes(request),
             "closure": closure,
             "orders": orders,
+            "product_summaries": closure.product_summaries,
+            "product_quantity": sum(product.quantity for product in closure.product_summaries),
         },
+    )
+
+
+@router.get("/{closure_id}/export.xlsx")
+def export_closure_excel(
+    closure_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user("admin", "cashier")),
+):
+    closure = db.scalar(
+        select(RegisterClosure)
+        .where(RegisterClosure.id == closure_id)
+        .options(selectinload(RegisterClosure.product_summaries))
+    )
+    if closure is None:
+        return RedirectResponse("/closures", status_code=303)
+    filename = f"chiusura-{closure.business_date}-T{closure.register_session}.xlsx"
+    return Response(
+        content=build_closure_excel(closure, closure.product_summaries),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
